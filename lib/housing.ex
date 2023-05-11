@@ -1,6 +1,6 @@
-alias Explorer.DataFrame, as: DF
-
 defmodule Learning.Housing do
+  alias Explorer.DataFrame, as: DF
+
   def load_housing_data do
     url = "https://raw.githubusercontent.com/ageron/data/main/housing.tgz"
     {:ok, %Req.Response{status: 200, body: raw_data}} = Req.get(url)
@@ -23,7 +23,7 @@ defmodule Learning.Housing do
   end
 
   def shuffle_and_split_data(dataframe, test_ratio \\ 0.20) do
-    shuffled_data = DF.shuffle(dataframe)
+    shuffled_data = DF.shuffle(dataframe, seed: 42)
     total_data_size = DF.n_rows(dataframe)
     test_data_size = trunc(total_data_size * test_ratio)
     test_data = DF.head(shuffled_data, test_data_size)
