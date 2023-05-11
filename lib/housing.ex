@@ -18,5 +18,17 @@ defmodule Learning.Housing do
     # Show Summary
     DF.head(housing_df)
     |> DF.describe()
+
+    housing_df
+  end
+
+  def shuffle_and_split_data(dataframe, test_ratio \\ 0.20) do
+    shuffled_data = DF.shuffle(dataframe)
+    total_data_size = DF.n_rows(dataframe)
+    test_data_size = trunc(total_data_size * test_ratio)
+    test_data = DF.head(shuffled_data, test_data_size)
+    train_data = DF.tail(shuffled_data, total_data_size - test_data_size)
+
+    %{"train" => train_data, "test" => test_data}
   end
 end
