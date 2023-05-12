@@ -17,14 +17,19 @@ VL.new(
   title: [
     text: "Conuntry GDP per capita - Life Satisfaction"
   ],
-  width: 500,
-  height: 500,
-  columns: 3
+  width: 600,
+  height: 400,
+  config: [
+    axis: [
+      grid: true,
+      grid_color: "#dedede"
+    ]
+  ]
 )
 |> VL.data_from_values(lifesat)
-|> VL.mark(:point, tooltip: true)
+|> VL.mark(:point, tooltip: true, grid: true)
 |> VL.encode_field(:x, "GDP per capita (USD)", type: :quantitative, bin: [bin: true, field: "GDP per capita (USD)"])
-|> VL.encode_field(:y, "Life satisfaction", type: :quantitative, bin: [bin: true, field: "Life satisfaction"])
+|> VL.encode_field(:y, "Life satisfaction", type: :quantitative, bin: [bin: true, maxbins: 12, field: "Life satisfaction"])
 |> VL.Viewer.show_and_wait()
 
 # Prepare data for model
