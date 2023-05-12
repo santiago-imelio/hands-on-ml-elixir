@@ -1,6 +1,7 @@
 alias Explorer.DataFrame, as: DF
 alias Explorer.Series, as: S
 alias Scholar.Linear.LinearRegression
+alias VegaLite, as: VL
 
 csv_url = "https://raw.githubusercontent.com/ageron/data/main/lifesat/lifesat.csv"
 
@@ -12,8 +13,21 @@ lifesat =
   |> DF.load_csv!()
 
 # Visualize the data
-DF.table(lifesat, limit: :infinity)
+VL.new(
+  title: [
+    text: "Conuntry GDP per capita - Life Satisfaction"
+  ],
+  width: 500,
+  height: 500,
+  columns: 3
+)
+|> VL.data_from_values(lifesat)
+|> VL.mark(:point, tooltip: true)
+|> VL.encode_field(:x, "GDP per capita (USD)", type: :quantitative, bin: [bin: true, field: "GDP per capita (USD)"])
+|> VL.encode_field(:y, "Life satisfaction", type: :quantitative, bin: [bin: true, field: "Life satisfaction"])
+|> VL.Viewer.show_and_wait()
 
+# Prepare data for model
 %{"GDP per capita (USD)" => x_series} =
   lifesat
   |> DF.select(["GDP per capita (USD)"])
@@ -24,16 +38,6 @@ DF.table(lifesat, limit: :infinity)
   |> DF.select(["Life satisfaction"])
   |> DF.to_series()
 
-# Plot
-x_list = S.to_list(x_series)
-y_list = S.to_list(y_series)
-
-Enum.zip(x_list, y_list)
-|> Contex.Dataset.new(["GDP per capita (USD)", "Life Satisfaction"])
-|> Contex.PointPlot.new()
-|> Contex.PointPlot.to_svg()
-
-# Prepare data for model
 x = S.to_tensor(x_series) |> Nx.reshape({27,1})
 y = S.to_tensor(y_series)
 
@@ -43,4 +47,5 @@ model = LinearRegression.fit(x, y)
 # Make a prediction for Cyprus
 x_new = Nx.tensor([[37655.2]]) # Cyprus' GDP per capita in 2020
 
-LinearRegression.predict(model, x_new) |> IO.inspect()
+"Prediction for Cyprus:" |> IO.puts
+LinearRegression.predict(model, x_new) |> IO.inspect

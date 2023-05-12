@@ -26,7 +26,9 @@ defmodule HandsOn.MixProject do
       {:req, "~> 0.3"},
       {:csv, "~> 3.0"},
       {:explorer, "~> 0.5.0"},
-      {:contex, "~> 0.4.0"}
+      {:vega_lite, "~> 0.1.6"},
+      {:kino_vega_lite, "~> 0.1.7"},
+      {:kino, "~> 0.8.1"}
     ]
   end
 end
