@@ -28,8 +28,14 @@ VL.new(
 )
 |> VL.data_from_values(lifesat)
 |> VL.mark(:point, tooltip: true, grid: true)
-|> VL.encode_field(:x, "GDP per capita (USD)", type: :quantitative, bin: [bin: true, field: "GDP per capita (USD)"])
-|> VL.encode_field(:y, "Life satisfaction", type: :quantitative, bin: [bin: true, maxbins: 12, field: "Life satisfaction"])
+|> VL.encode_field(:x, "GDP per capita (USD)",
+  type: :quantitative,
+  bin: [bin: true, field: "GDP per capita (USD)"]
+)
+|> VL.encode_field(:y, "Life satisfaction",
+  type: :quantitative,
+  bin: [bin: true, maxbins: 12, field: "Life satisfaction"]
+)
 |> VL.Viewer.show_and_wait()
 
 # Prepare data for model
@@ -43,14 +49,15 @@ VL.new(
   |> DF.select(["Life satisfaction"])
   |> DF.to_series()
 
-x = S.to_tensor(x_series) |> Nx.reshape({27,1})
+x = S.to_tensor(x_series) |> Nx.reshape({27, 1})
 y = S.to_tensor(y_series)
 
 # Select a linear model
 model = LinearRegression.fit(x, y)
 
 # Make a prediction for Cyprus
-x_new = Nx.tensor([[37655.2]]) # Cyprus' GDP per capita in 2020
+# Cyprus' GDP per capita in 2020
+x_new = Nx.tensor([[37655.2]])
 
-"Prediction for Cyprus:" |> IO.puts
-LinearRegression.predict(model, x_new) |> IO.inspect
+"Prediction for Cyprus:" |> IO.puts()
+LinearRegression.predict(model, x_new) |> IO.inspect()
