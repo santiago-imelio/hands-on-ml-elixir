@@ -94,6 +94,10 @@ defmodule Learning.Housing.Plot do
         scheme: "rainbow",
       ]
     ])
+    |> VL.encode(:size, [
+      type: :quantitative,
+      field: "population"
+    ])
     |> VL.Viewer.show()
   end
 end
