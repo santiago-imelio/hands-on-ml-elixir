@@ -50,4 +50,43 @@ defmodule Learning.Housing.Plot do
     |> VL.encode_field(:y, "value count", aggregate: :count)
     |> VL.Viewer.show()
   end
+
+  def location_scatter_plot(df) do
+    VL.new(
+      title: [
+        text: "Latitude-longitude scatterplot"
+      ],
+      width: 800,
+      height: 650,
+      config: [
+        axis: [
+          grid: true,
+          grid_color: "#dedede"
+        ]
+      ]
+    )
+    |> VL.data_from_values(df)
+    |> VL.mark(:point)
+    |> VL.encode_field(
+      :x,
+      "longitude",
+      [
+        type: :quantitative,
+        scale: [
+          zero: false
+        ]
+      ]
+    )
+    |> VL.encode_field(
+      :y,
+      "latitude",
+      [
+        type: :quantitative,
+        scale: [
+          zero: false
+        ]
+      ]
+    )
+    |> VL.Viewer.show()
+  end
 end
