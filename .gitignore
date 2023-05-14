@@ -24,3 +24,6 @@ hands_on-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# Datasets downloaded from internet
+/datasets/

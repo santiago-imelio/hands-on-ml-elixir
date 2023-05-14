@@ -4,10 +4,25 @@ defmodule Learning.Housing do
 
   # Fetch housing data that we'll use to train our model
   def load_housing_data do
-    url = "https://raw.githubusercontent.com/ageron/data/main/housing.tgz"
-    {:ok, %Req.Response{status: 200, body: raw_data}} = Req.get(url)
+    csv_path =
+      "../hands_on"
+      |> Path.expand()
+      |> Kernel.<>("/datasets/housing.csv")
 
-    [{'housing/housing.csv', raw_csv}] = raw_data
+    raw_csv =
+      if File.exists?(csv_path) do
+        File.read!(csv_path)
+      else
+        url = "https://raw.githubusercontent.com/ageron/data/main/housing.tgz"
+
+        IO.puts("Fetching data from #{url}...")
+        [{'housing/housing.csv', csv_data}] = Req.get!(url).body
+
+        # Save CSV
+        File.write!(csv_path, csv_data)
+
+        csv_data
+      end
 
     # Load csv into DataFrame
     housing_df = DF.load_csv!(raw_csv)
@@ -22,18 +37,6 @@ defmodule Learning.Housing do
     |> DF.describe()
 
     housing_df
-  end
-
-  # Randomly partition our data into two, sets: training data set that we'll
-  # use to train the model; and test data set that we'll use to test it.
-  def shuffle_and_split_data(dataframe, test_ratio \\ 0.20) do
-    shuffled_data = DF.shuffle(dataframe, seed: 42)
-    total_data_size = DF.n_rows(dataframe)
-    test_data_size = trunc(total_data_size * test_ratio)
-    test_data = DF.head(shuffled_data, test_data_size)
-    train_data = DF.tail(shuffled_data, total_data_size - test_data_size)
-
-    %{"train" => train_data, "test" => test_data}
   end
 
   def add_income_category_column(housing_df) do
