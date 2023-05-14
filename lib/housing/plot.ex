@@ -87,6 +87,13 @@ defmodule Learning.Housing.Plot do
         ]
       ]
     )
+    |> VL.encode(:color, [
+      field: "median_house_value",
+      type: :quantitative,
+      scale: [
+        scheme: "rainbow",
+      ]
+    ])
     |> VL.Viewer.show()
   end
 end
