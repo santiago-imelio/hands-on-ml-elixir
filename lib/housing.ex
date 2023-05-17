@@ -1,6 +1,8 @@
 defmodule Learning.Housing do
   alias Explorer.DataFrame, as: DF
   alias Explorer.Series, as: S
+  alias Scholar.Impute.SimpleImputer
+  alias Learning.Utils
 
   # Fetch housing data that we'll use to train our model
   def load_housing_data do
@@ -54,5 +56,20 @@ defmodule Learning.Housing do
     Enum.find_index(bins, fn bin ->
       income_value <= bin
     end)
+  end
+
+  def data_preprocessing_pipeline(housing_df) do
+    clean_data_tensor =
+      housing_df
+      |> DF.discard("ocean_proximity")
+      |> Utils.to_series_list()
+      |> Enum.map(&Utils.map_nils_to_nan/1)
+      |> Enum.map(&S.to_tensor/1)
+      |> Enum.map(&Nx.to_list/1)
+      |> Nx.tensor()
+      |> Nx.transpose()
+
+    simple_imputer = SimpleImputer.fit(clean_data_tensor, strategy: :median)
+    SimpleImputer.transform(simple_imputer, clean_data_tensor)
   end
 end
