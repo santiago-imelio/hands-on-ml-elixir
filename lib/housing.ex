@@ -2,6 +2,7 @@ defmodule Learning.Housing do
   alias Explorer.DataFrame, as: DF
   alias Explorer.Series, as: S
   alias Scholar.Impute.SimpleImputer
+  alias Scholar.Preprocessing
   alias Learning.Utils
 
   # Fetch housing data that we'll use to train our model
@@ -58,8 +59,8 @@ defmodule Learning.Housing do
     end)
   end
 
-  def data_preprocessing_pipeline(housing_df) do
-    clean_data_tensor =
+  def preprocessing_pipeline(housing_df) do
+    housing_num =
       housing_df
       |> DF.discard("ocean_proximity")
       |> Utils.to_series_list()
@@ -69,7 +70,38 @@ defmodule Learning.Housing do
       |> Nx.tensor()
       |> Nx.transpose()
 
-    simple_imputer = SimpleImputer.fit(clean_data_tensor, strategy: :median)
-    SimpleImputer.transform(simple_imputer, clean_data_tensor)
+    x =
+      housing_num
+      |> SimpleImputer.fit(strategy: :median)
+      |> SimpleImputer.transform(housing_num)
+      |> IO.inspect()
+
+    col_names =
+      housing_df
+      |> DF.names()
+      |> List.delete("ocean_proximity")
+
+    x
+    |> Nx.transpose()
+    |> Nx.to_list()
+    |> Utils.to_columns_map(col_names)
+    |> DF.new()
+    |> DF.head()
+    |> DF.table()
+  end
+
+  def one_hot_encode_category(housing_df, col_name) do
+    n_categories =
+      housing_df
+      |> DF.select(col_name)
+      |> DF.to_series()
+      |> Map.get(col_name)
+      |> S.cast(:category)
+      |> S.categories()
+      |> S.count()
+
+    Enum.to_list(0..(n_categories - 1))
+    |> Nx.tensor()
+    |> Preprocessing.one_hot_encode(num_classes: n_categories)
   end
 end

@@ -51,4 +51,24 @@ defmodule Learning.Utils do
       |> Map.get(col)
     end)
   end
+
+  @doc """
+  Converts a list of column lists into a map of columns.
+  Useful for dataframe input. Assumes that
+  the names and the columns have the same index.
+  """
+  def to_columns_map(column_list, col_names) do
+    col_names
+    |> Enum.zip_with(column_list, fn name, col ->
+      %{"#{name}" => col}
+    end)
+    |> Map.new(fn map ->
+      [[col_name], [col_list]] = [
+        Map.keys(map),
+        Map.values(map)
+      ]
+
+      {col_name, col_list}
+    end)
+  end
 end
