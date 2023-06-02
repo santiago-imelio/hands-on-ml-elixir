@@ -2,7 +2,6 @@ defmodule Learning.Housing do
   alias Explorer.DataFrame, as: DF
   alias Explorer.Series, as: S
   alias Scholar.Impute.SimpleImputer
-  alias Scholar.Preprocessing
   alias Learning.Utils
 
   # Fetch housing data that we'll use to train our model
@@ -90,19 +89,8 @@ defmodule Learning.Housing do
     |> DF.table()
   end
 
-  @doc """
-  Converts a categorical attribute dataframe into a one-hot encoded
-  tensor. One-hot encoding allows to create a binary attribute for
-  each category of a categorical feature. Basically, it turns a
-  categorical column in a sparse matrix with 0s and 1s.
-  """
-  def one_hot_encode_category(housing_df, col_name, n_categories) do
+  def housing_cat_one_hot(housing_df) do
     housing_df
-    |> DF.select(col_name)
-    |> DF.to_series()
-    |> Map.get(col_name)
-    |> S.cast(:category)
-    |> S.to_tensor()
-    |> Preprocessing.one_hot_encode(num_classes: n_categories)
+    |> Utils.one_hot_encode_category("ocean_proximity", 5)
   end
 end

@@ -1,6 +1,7 @@
 defmodule Learning.Utils do
   alias Explorer.DataFrame, as: DF
   alias Explorer.Series, as: S
+  alias Scholar.Preprocessing
 
   def shuffle_and_split_data(%DF{} = dataframe, test_ratio \\ 0.20) do
     test_data_size =
@@ -70,5 +71,21 @@ defmodule Learning.Utils do
 
       {col_name, col_list}
     end)
+  end
+
+  @doc """
+  Converts a categorical attribute dataframe into a one-hot encoded
+  tensor. One-hot encoding allows to create a binary attribute for
+  each category of a categorical feature. Basically, it turns a
+  categorical column in a sparse matrix with 0s and 1s.
+  """
+  def one_hot_encode_category(df, col_name, n_categories) do
+    df
+    |> DF.select(col_name)
+    |> DF.to_series()
+    |> Map.get(col_name)
+    |> S.cast(:category)
+    |> S.to_tensor()
+    |> Preprocessing.one_hot_encode(num_classes: n_categories)
   end
 end
