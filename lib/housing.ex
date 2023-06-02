@@ -41,6 +41,14 @@ defmodule Learning.Housing do
     housing_df
   end
 
+  @doc """
+  Drops non-numerical column "ocean_proximity"
+  """
+  def num_housing_df(housing_df) do
+    housing_df
+    |> DF.discard("ocean_proximity")
+  end
+
   def add_income_category_column(housing_df) do
     income_cat =
       housing_df
@@ -61,7 +69,7 @@ defmodule Learning.Housing do
   def preprocessing_pipeline(housing_df) do
     housing_num =
       housing_df
-      |> DF.discard("ocean_proximity")
+      |> num_housing_df()
       |> Utils.to_series_list()
       |> Enum.map(&Utils.map_nils_to_nan/1)
       |> Enum.map(&S.to_tensor/1)

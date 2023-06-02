@@ -43,14 +43,9 @@ defmodule Learning.Utils do
   the original ordering of columns.
   """
   def to_series_list(df) do
-    column_names = DF.names(df)
-
-    Enum.map(column_names, fn col ->
-      df
-      |> DF.select(col)
-      |> DF.to_series()
-      |> Map.get(col)
-    end)
+    df
+    |> DF.names()
+    |> Enum.map(fn col -> DF.pull(df, col) end)
   end
 
   @doc """
@@ -81,9 +76,7 @@ defmodule Learning.Utils do
   """
   def one_hot_encode_category(df, col_name, n_categories) do
     df
-    |> DF.select(col_name)
-    |> DF.to_series()
-    |> Map.get(col_name)
+    |> DF.pull(col_name)
     |> S.cast(:category)
     |> S.to_tensor()
     |> Preprocessing.one_hot_encode(num_classes: n_categories)
