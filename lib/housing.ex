@@ -71,11 +71,7 @@ defmodule Learning.Housing do
     housing_num =
       housing_df
       |> num_housing_df()
-      |> Utils.to_series_list()
-      |> Enum.map(&Utils.map_nils_to_nan/1)
-      |> Enum.map(&S.to_tensor/1)
-      |> Enum.map(&Nx.to_list/1)
-      |> Nx.tensor()
+      |> Utils.to_tensor()
       |> Nx.transpose()
 
     x =
