@@ -90,18 +90,19 @@ defmodule Learning.Housing do
     |> DF.table()
   end
 
-  def one_hot_encode_category(housing_df, col_name) do
-    n_categories =
-      housing_df
-      |> DF.select(col_name)
-      |> DF.to_series()
-      |> Map.get(col_name)
-      |> S.cast(:category)
-      |> S.categories()
-      |> S.count()
-
-    Enum.to_list(0..(n_categories - 1))
-    |> Nx.tensor()
+  @doc """
+  Converts a categorical attribute dataframe into a one-hot encoded
+  tensor. One-hot encoding allows to create a binary attribute for
+  each category of a categorical feature. Basically, it turns a
+  categorical column in a sparse matrix with 0s and 1s.
+  """
+  def one_hot_encode_category(housing_df, col_name, n_categories) do
+    housing_df
+    |> DF.select(col_name)
+    |> DF.to_series()
+    |> Map.get(col_name)
+    |> S.cast(:category)
+    |> S.to_tensor()
     |> Preprocessing.one_hot_encode(num_classes: n_categories)
   end
 end
