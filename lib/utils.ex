@@ -49,6 +49,19 @@ defmodule Learning.Utils do
   end
 
   @doc """
+  Converts dataframe into a tensor. Expects dataframe that
+  contains only numerical values.
+  """
+  def to_tensor(df) do
+    df
+    |> to_series_list()
+    |> Enum.map(&map_nils_to_nan/1)
+    |> Enum.map(&S.to_tensor/1)
+    |> Enum.map(&Nx.to_list/1)
+    |> Nx.tensor()
+  end
+
+  @doc """
   Converts a list of column lists into a map of columns.
   Useful for dataframe input. Assumes that
   the names and the columns have the same index.

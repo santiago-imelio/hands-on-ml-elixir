@@ -1,4 +1,5 @@
 defmodule Learning.Housing do
+  alias Scholar.Preprocessing
   alias Explorer.DataFrame, as: DF
   alias Explorer.Series, as: S
   alias Scholar.Impute.SimpleImputer
@@ -100,5 +101,19 @@ defmodule Learning.Housing do
   def housing_cat_one_hot(housing_df) do
     housing_df
     |> Utils.one_hot_encode_category("ocean_proximity", 5)
+  end
+
+  def min_max_scaler(housing_df) do
+    housing_df
+    |> num_housing_df()
+    |> Utils.to_tensor()
+    |> Preprocessing.min_max_scale(axes: [1], min: -1, max: 1)
+  end
+
+  def standard_scaler(housing_df) do
+    housing_df
+    |> num_housing_df()
+    |> Utils.to_tensor()
+    |> Preprocessing.standard_scale(axes: [1])
   end
 end
