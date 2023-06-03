@@ -1,8 +1,8 @@
 defmodule Learning.Housing do
-  alias Scholar.Preprocessing
   alias Explorer.DataFrame, as: DF
   alias Explorer.Series, as: S
   alias Scholar.Impute.SimpleImputer
+  alias Scholar.Preprocessing
   alias Learning.Utils
 
   # Fetch housing data that we'll use to train our model
@@ -42,12 +42,32 @@ defmodule Learning.Housing do
     housing_df
   end
 
+  def housing_labels(housing_df) do
+    housing_df
+    |> DF.select("median_house_value")
+  end
+
   @doc """
   Drops non-numerical column "ocean_proximity"
   """
   def num_housing_df(housing_df) do
     housing_df
     |> DF.discard("ocean_proximity")
+  end
+
+  @doc """
+  List of numerical features names for housing dataset
+  """
+  def num_housing_attrs do
+    ["longitude", "latitude", "housing_median_age", "total_rooms",
+      "total_bedrooms", "population", "households", "median_income"]
+  end
+
+  @doc """
+  List of categorical features names for housing dataset
+  """
+  def cat_housing_attrs do
+    ["ocean_proximity"]
   end
 
   def add_income_category_column(housing_df) do
@@ -67,31 +87,45 @@ defmodule Learning.Housing do
     end)
   end
 
-  def preprocessing_pipeline(housing_df) do
-    housing_num =
-      housing_df
-      |> num_housing_df()
-      |> Utils.to_tensor()
-      |> Nx.transpose()
+  def num_housing(housing_df) do
+    housing_df
+    |> DF.select(num_housing_attrs())
+    |> Utils.to_tensor()
+  end
 
-    x =
-      housing_num
-      |> SimpleImputer.fit(strategy: :median)
-      |> SimpleImputer.transform(housing_num)
-      |> IO.inspect()
+  def cat_housing(housing_df) do
+    housing_df
+    |> DF.select(cat_housing_attrs())
+    |> DF.pull("ocean_proximity")
+    |> S.cast(:category)
+    |> S.to_tensor()
+    # |> Nx.reshape({1, DF.n_rows(housing_df)})
+  end
 
-    col_names =
-      housing_df
-      |> DF.names()
-      |> List.delete("ocean_proximity")
-
-    x
+  def numerical_pipeline(housing_df) do
+    housing_df
+    |> num_housing
+    |> SimpleImputer.fit(strategy: :median)
+    |> SimpleImputer.transform(num_housing(housing_df))
+    |> Preprocessing.standard_scale(axes: [1])
     |> Nx.transpose()
-    |> Nx.to_list()
-    |> Utils.to_columns_map(col_names)
-    |> DF.new()
-    |> DF.head()
-    |> DF.table()
+  end
+
+  def categorical_pipeline(housing_df) do
+    housing_df
+    |> cat_housing
+    # |> SimpleImputer.fit(strategy: :mode)
+    # |> SimpleImputer.transform(cat_housing(housing_df))
+    |> Preprocessing.one_hot_encode(num_classes: 5)
+  end
+
+  def preprocessing(housing_df) do
+    processed_data = [
+      numerical_pipeline(housing_df),
+      categorical_pipeline(housing_df)
+    ]
+
+    Nx.concatenate(processed_data, axis: 1)
   end
 
   def housing_cat_one_hot(housing_df) do
@@ -99,17 +133,10 @@ defmodule Learning.Housing do
     |> Utils.one_hot_encode_category("ocean_proximity", 5)
   end
 
-  def min_max_scaler(housing_df) do
-    housing_df
-    |> num_housing_df()
-    |> Utils.to_tensor()
-    |> Preprocessing.min_max_scale(axes: [1], min: -1, max: 1)
-  end
+  def housing_prepared(housing_df) do
+    %{"train" => housing} =
+      Utils.shuffle_and_split_data(housing_df)
 
-  def standard_scaler(housing_df) do
-    housing_df
-    |> num_housing_df()
-    |> Utils.to_tensor()
-    |> Preprocessing.standard_scale(axes: [1])
+    preprocessing(housing)
   end
 end
