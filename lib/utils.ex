@@ -85,7 +85,8 @@ defmodule Learning.Utils do
   Converts a categorical attribute dataframe into a one-hot encoded
   tensor. One-hot encoding allows to create a binary attribute for
   each category of a categorical feature. Basically, it turns a
-  categorical column in a sparse matrix with 0s and 1s.
+  categorical column in a sparse matrix with 0s and 1s, where each
+  row is a one-hot encoded vector.
   """
   def one_hot_encode_category(df, col_name, n_categories) do
     df
