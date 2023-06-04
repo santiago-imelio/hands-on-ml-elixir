@@ -40,11 +40,14 @@ defmodule Learning.Housing do
     |> DF.describe()
 
     housing_df
+    # |> DF.head(500) Cut data for faster training
   end
 
-  def housing_labels(housing_df) do
+  def labels(housing_df) do
     housing_df
-    |> DF.select("median_house_value")
+    |> DF.pull("median_house_value")
+    |> S.to_tensor()
+    |> Nx.reshape({DF.n_rows(housing_df), 1})
   end
 
   @doc """
@@ -56,7 +59,8 @@ defmodule Learning.Housing do
   end
 
   @doc """
-  List of numerical features names for housing dataset
+  List of numerical features names for housing dataset.
+  Note that we exclude our the feature to predict.
   """
   def num_housing_attrs do
     ["longitude", "latitude", "housing_median_age", "total_rooms",
@@ -99,7 +103,8 @@ defmodule Learning.Housing do
     |> DF.pull("ocean_proximity")
     |> S.cast(:category)
     |> S.to_tensor()
-    # |> Nx.reshape({1, DF.n_rows(housing_df)})
+    |> Nx.reshape({1, DF.n_rows(housing_df)})
+    |> Nx.transpose()
   end
 
   def numerical_pipeline(housing_df) do
@@ -114,8 +119,9 @@ defmodule Learning.Housing do
   def categorical_pipeline(housing_df) do
     housing_df
     |> cat_housing
-    # |> SimpleImputer.fit(strategy: :mode)
-    # |> SimpleImputer.transform(cat_housing(housing_df))
+    |> SimpleImputer.fit(strategy: :mode)
+    |> SimpleImputer.transform(cat_housing(housing_df))
+    |> Nx.reshape({DF.n_rows(housing_df)})
     |> Preprocessing.one_hot_encode(num_classes: 5)
   end
 
@@ -134,9 +140,9 @@ defmodule Learning.Housing do
   end
 
   def housing_prepared(housing_df) do
-    %{"train" => housing} =
+    {train, _test} =
       Utils.shuffle_and_split_data(housing_df)
 
-    preprocessing(housing)
+    preprocessing(train)
   end
 end

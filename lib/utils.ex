@@ -19,10 +19,8 @@ defmodule Learning.Utils do
       dataframe
       |> DF.shuffle(seed: 42)
 
-    %{
-      "train" => DF.head(shuffled_data, train_data_size),
-      "test" => DF.tail(shuffled_data, test_data_size)
-    }
+    {DF.head(shuffled_data, train_data_size),
+      DF.tail(shuffled_data, test_data_size)}
   end
 
   def map_nils_to_nan(%S{} = series) do
