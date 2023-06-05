@@ -2,7 +2,7 @@ defmodule Learning.Housing do
   alias Explorer.DataFrame, as: DF
   alias Explorer.Series, as: S
   alias Scholar.Impute.SimpleImputer
-  alias Scholar.Preprocessing
+  # alias Scholar.Preprocessing
   alias Learning.Utils
 
   # Fetch housing data that we'll use to train our model
@@ -40,14 +40,11 @@ defmodule Learning.Housing do
     |> DF.describe()
 
     housing_df
-    # |> DF.head(500) Cut data for faster training
   end
 
   def labels(housing_df) do
-    housing_df
-    |> DF.pull("median_house_value")
-    |> S.to_tensor()
-    |> Nx.reshape({DF.n_rows(housing_df), 1})
+    housing_df[["median_house_value"]]
+    |> Nx.concatenate()
   end
 
   @doc """
@@ -92,19 +89,18 @@ defmodule Learning.Housing do
   end
 
   def num_housing(housing_df) do
-    housing_df
-    |> DF.select(num_housing_attrs())
-    |> Utils.to_tensor()
+    for name <- num_housing_attrs(), into: [] do
+      {name, S.fill_missing(housing_df[name], :nan)}
+    end
+    |> DF.new()
+    |> Nx.stack(axis: 1)
   end
 
   def cat_housing(housing_df) do
-    housing_df
-    |> DF.select(cat_housing_attrs())
-    |> DF.pull("ocean_proximity")
+    housing_df["ocean_proximity"]
     |> S.cast(:category)
     |> S.to_tensor()
-    |> Nx.reshape({1, DF.n_rows(housing_df)})
-    |> Nx.transpose()
+    |> Nx.reshape({DF.n_rows(housing_df), 1})
   end
 
   def numerical_pipeline(housing_df) do
@@ -112,8 +108,7 @@ defmodule Learning.Housing do
     |> num_housing
     |> SimpleImputer.fit(strategy: :median)
     |> SimpleImputer.transform(num_housing(housing_df))
-    |> Preprocessing.standard_scale(axes: [1])
-    |> Nx.transpose()
+    # |> Preprocessing.standard_scale(axes: [1])
   end
 
   def categorical_pipeline(housing_df) do
@@ -121,8 +116,8 @@ defmodule Learning.Housing do
     |> cat_housing
     |> SimpleImputer.fit(strategy: :mode)
     |> SimpleImputer.transform(cat_housing(housing_df))
-    |> Nx.reshape({DF.n_rows(housing_df)})
-    |> Preprocessing.one_hot_encode(num_classes: 5)
+    # |> Nx.reshape({DF.n_rows(housing_df)})
+    # |> Preprocessing.one_hot_encode(num_classes: 5)
   end
 
   def preprocessing(housing_df) do
