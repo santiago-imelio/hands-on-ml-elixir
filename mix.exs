@@ -22,6 +22,7 @@ defmodule HandsOn.MixProject do
   defp deps do
     [
       {:nx, "~> 0.2"},
+      {:exla, "~> 0.5"},
       {:scholar, "~> 0.1"},
       {:req, "~> 0.3"},
       {:csv, "~> 3.0"},
