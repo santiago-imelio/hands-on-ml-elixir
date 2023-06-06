@@ -100,4 +100,80 @@ defmodule Learning.Housing.Plot do
     ])
     |> VL.Viewer.show()
   end
+
+  def geo_clusters(df, clusters_df) do
+    VL.new(
+      title: [
+        text: "Geographic clusters found by KMeans algorithm"
+      ],
+      width: 800,
+      height: 650,
+      config: [
+        axis: [
+          grid: true,
+          grid_color: "#dedede"
+        ]
+      ]
+    )
+    |> VL.layers([
+      VL.new(
+        width: 800,
+        height: 650
+      )
+      |> VL.data_from_values(df)
+      |> VL.mark(:point)
+      |> VL.encode_field(
+        :x,
+        "longitude",
+        [
+          type: :quantitative,
+          scale: [
+            zero: false
+          ]
+        ]
+      )
+      |> VL.encode_field(
+        :y,
+        "latitude",
+        [
+          type: :quantitative,
+          scale: [
+            zero: false
+          ]
+        ]
+      ),
+      VL.new(
+        width: 800,
+        height: 650
+      )
+      |> VL.data_from_values(clusters_df)
+      |> VL.mark(:point, [
+        size: 70,
+        color: "#0d0154",
+        stroke_width: 10,
+        opacity: 1
+      ])
+      |> VL.encode_field(
+        :x,
+        "x2",
+        [
+          type: :quantitative,
+          scale: [
+            zero: false
+          ]
+        ]
+      )
+      |> VL.encode_field(
+        :y,
+        "x1",
+        [
+          type: :quantitative,
+          scale: [
+            zero: false
+          ]
+        ]
+      )
+    ])
+    |> VL.Viewer.show()
+  end
 end
