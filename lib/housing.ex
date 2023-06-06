@@ -1,9 +1,8 @@
 defmodule Learning.Housing do
-  alias Explorer.DataFrame, as: DF
+  require Explorer.DataFrame, as: DF
   alias Explorer.Series, as: S
   alias Scholar.Impute.SimpleImputer
-  # alias Scholar.Preprocessing
-  alias Learning.Utils
+  alias Scholar.Preprocessing
 
   # Fetch housing data that we'll use to train our model
   def load_housing_data do
@@ -40,11 +39,6 @@ defmodule Learning.Housing do
     |> DF.describe()
 
     housing_df
-  end
-
-  def labels(housing_df) do
-    housing_df[["median_house_value"]]
-    |> Nx.concatenate()
   end
 
   @doc """
@@ -97,10 +91,11 @@ defmodule Learning.Housing do
   end
 
   def cat_housing(housing_df) do
-    housing_df["ocean_proximity"]
-    |> S.cast(:category)
-    |> S.to_tensor()
-    |> Nx.reshape({DF.n_rows(housing_df), 1})
+    housing_df
+    |> add_income_category_column()
+    |> DF.select(cat_housing_attrs() ++ ["income_category"])
+    |> DF.mutate(%{"ocean_proximity" => cast(ocean_proximity, :category)})
+    |> Nx.stack(axis: 1)
   end
 
   def numerical_pipeline(housing_df) do
@@ -108,7 +103,7 @@ defmodule Learning.Housing do
     |> num_housing
     |> SimpleImputer.fit(strategy: :median)
     |> SimpleImputer.transform(num_housing(housing_df))
-    # |> Preprocessing.standard_scale(axes: [1])
+    # |> Preprocessing.standard_scale()
   end
 
   def categorical_pipeline(housing_df) do
@@ -127,17 +122,5 @@ defmodule Learning.Housing do
     ]
 
     Nx.concatenate(processed_data, axis: 1)
-  end
-
-  def housing_cat_one_hot(housing_df) do
-    housing_df
-    |> Utils.one_hot_encode_category("ocean_proximity", 5)
-  end
-
-  def housing_prepared(housing_df) do
-    {train, _test} =
-      Utils.shuffle_and_split_data(housing_df)
-
-    preprocessing(train)
   end
 end
