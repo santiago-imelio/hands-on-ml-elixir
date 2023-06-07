@@ -1,5 +1,6 @@
 defmodule Learning.Housing.Plot do
   alias VegaLite, as: VL
+  alias Explorer.DataFrame, as: DF
 
   # Taken from https://hexdocs.pm/scholar/linear_regression.html#california-housing
   def all_features_hist(df) do
@@ -101,7 +102,15 @@ defmodule Learning.Housing.Plot do
     |> VL.Viewer.show()
   end
 
-  def geo_clusters(df, clusters_df) do
+  def geo_clusters(housing_df, clusters, kmeans_labels) do
+    clusters_df = DF.new(Nx.tensor(clusters)) |> IO.inspect()
+    # kmeans_labels_df = DF.new(Nx.reshape(kmeans_labels, {20640, 1})) |> IO.inspect()
+
+    df_with_kmeans_labels =
+      housing_df
+      |> DF.put("kmeans_labels", Nx.stack(kmeans_labels, axis: 1))
+      |> IO.inspect()
+
     VL.new(
       title: [
         text: "Geographic clusters found by KMeans algorithm"
@@ -120,7 +129,7 @@ defmodule Learning.Housing.Plot do
         width: 800,
         height: 650
       )
-      |> VL.data_from_values(df)
+      |> VL.data_from_values(df_with_kmeans_labels)
       |> VL.mark(:point)
       |> VL.encode_field(
         :x,
@@ -139,6 +148,16 @@ defmodule Learning.Housing.Plot do
           type: :quantitative,
           scale: [
             zero: false
+          ]
+        ]
+      )
+      |> VL.encode_field(
+        :color,
+        "kmeans_labels",
+        [
+          type: :ordinal,
+          scale: [
+            scheme: "rainbow"
           ]
         ]
       ),
