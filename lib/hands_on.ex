@@ -20,24 +20,19 @@ defmodule HandsOn do
     y_train = Nx.concatenate(train_data_df[["median_house_value"]])
     y_test = Nx.concatenate(test_data_df[["median_house_value"]])
 
-    # preprocessed training data
-    x_train =
-      train_data_df
-      |> DF.discard("median_house_value")
-      |> Housing.preprocessing()
+    # preprocess both train and test data
+    [x_train, x_test] = Task.await_many([
+      Task.async(fn -> Housing.preprocessing(train_data_df) end),
+      Task.async(fn -> Housing.preprocessing(test_data_df) end)
+    ], :infinity)
 
-    # preprocessded test data
-    x_test =
-      test_data_df
-      |> DF.discard("median_house_value")
-      |> Housing.preprocessing()
-
-    IO.puts("training model ...")
+    IO.puts("\nPreprocessing done. Training model ...")
 
     # train linear model
     model = LinearRegression.fit(x_train, y_train)
 
-    IO.puts("\nDone.\n")
+    IO.puts("\nTraining Done.\n")
+    IO.inspect(model)
 
     # predict on test set
     predictions = LinearRegression.predict(model, x_test)
@@ -46,7 +41,7 @@ defmodule HandsOn do
     rmse = Metrics.mean_square_error(y_test, predictions) |> Nx.sqrt()
     mae = Metrics.mean_absolute_error(y_test, predictions)
 
-    IO.puts("target mean: #{Nx.mean(y) |> Nx.to_number}")
+    IO.puts("\ntarget mean: #{Nx.mean(y) |> Nx.to_number}")
     IO.puts("root mean square error: #{Nx.to_number(rmse)}")
     IO.puts("mean absolute error: #{Nx.to_number(mae)}")
   end

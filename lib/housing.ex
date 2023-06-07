@@ -42,14 +42,6 @@ defmodule Learning.Housing do
   end
 
   @doc """
-  Drops non-numerical column "ocean_proximity"
-  """
-  def num_housing_df(housing_df) do
-    housing_df
-    |> DF.discard("ocean_proximity")
-  end
-
-  @doc """
   List of numerical features names for housing dataset.
   Note that we exclude our the feature to predict.
   """
@@ -70,57 +62,90 @@ defmodule Learning.Housing do
       housing_df
       |> DF.pull("median_income")
       |> S.transform(&bin_median_income/1)
+      |> S.cast(:category)
 
     DF.put(housing_df, :income_category, income_cat)
   end
 
   defp bin_median_income(income_value) do
-    bins = [0, 1.5, 3.0, 4.5, 6.0, :infinity]
-
-    Enum.find_index(bins, fn bin ->
-      income_value <= bin
-    end)
+    [0, 1.5, 3.0, 4.5, 6.0, :infinity]
+    |> Enum.find_index(&(income_value <= &1))
+    |> Integer.to_string()
   end
 
-  def num_housing(housing_df) do
-    for name <- num_housing_attrs(), into: [] do
-      {name, S.fill_missing(housing_df[name], :nan)}
+  def numerical_pipeline(df, attrs) do
+    IO.puts("executing numerical pipeline ...")
+
+    x = for name <- attrs, into: [] do
+      {name, S.fill_missing(df[name], :nan)}
     end
     |> DF.new()
     |> Nx.stack(axis: 1)
-  end
 
-  def cat_housing(housing_df) do
-    housing_df
-    |> add_income_category_column()
-    |> DF.select(cat_housing_attrs() ++ ["income_category"])
-    |> DF.mutate(%{"ocean_proximity" => cast(ocean_proximity, :category)})
-    |> Nx.stack(axis: 1)
-  end
-
-  def numerical_pipeline(housing_df) do
-    housing_df
-    |> num_housing
+    x
     |> SimpleImputer.fit(strategy: :median)
-    |> SimpleImputer.transform(num_housing(housing_df))
-    # |> Preprocessing.standard_scale()
+    |> SimpleImputer.transform(x)
+    |> Preprocessing.standard_scale(axes: [0])
   end
 
-  def categorical_pipeline(housing_df) do
-    housing_df
-    |> cat_housing
+  def categorical_pipeline(df, attrs) do
+    IO.puts("executing categorical pipeline ...")
+
+    x = for name <- attrs, into: [] do
+      {name, S.cast(DF.pull(df, name), :category)}
+    end
+    |> DF.new()
+    |> Nx.stack(axis: 1)
+
+    x
     |> SimpleImputer.fit(strategy: :mode)
-    |> SimpleImputer.transform(cat_housing(housing_df))
-    # |> Nx.reshape({DF.n_rows(housing_df)})
-    # |> Preprocessing.one_hot_encode(num_classes: 5)
+    |> SimpleImputer.transform(x)
   end
 
-  def preprocessing(housing_df) do
-    processed_data = [
-      numerical_pipeline(housing_df),
-      categorical_pipeline(housing_df)
-    ]
+  def ratio_pipeline(df, attr1, attr2) do
+    IO.puts("executing ratio pipeline -> #{attr1} / #{attr2} ...")
 
-    Nx.concatenate(processed_data, axis: 1)
+    x = for name <- [attr1, attr2], into: [] do
+      {name, S.fill_missing(df[name], :nan)}
+    end
+    |> DF.new
+    |> DF.select([attr1, attr2])
+    |> Nx.stack(axis: 1)
+
+    x_new =
+      x
+      |> SimpleImputer.fit(strategy: :median)
+      |> SimpleImputer.transform(x)
+
+    col1 = Nx.take(x_new, 0, axis: 1)
+    col2 = Nx.take(x_new, 1, axis: 1)
+
+    Nx.divide(col1, col2) |> Nx.reshape({DF.n_rows(df), 1})
+  end
+
+  # This takes a while, so not adding it to data pipeline
+  def cluster_simil(df, attrs) do
+    IO.puts("executing cluster similarity pipeline ...")
+
+    df
+    |> DF.select(attrs)
+    |> Nx.stack(axis: 1)
+    |> ClusterSimilarity.fit_transform()
+  end
+
+  def preprocessing(df) do
+    df = add_income_category_column(df)
+
+    num_attrs = num_housing_attrs()
+    cat_attrs = cat_housing_attrs() ++ ["income_category"]
+
+    Task.await_many([
+      Task.async(fn -> ratio_pipeline(df, "total_bedrooms", "total_rooms") end),
+      Task.async(fn -> ratio_pipeline(df, "total_rooms", "households") end),
+      Task.async(fn -> ratio_pipeline(df, "population", "households") end),
+      Task.async(fn -> numerical_pipeline(df, num_attrs) end),
+      Task.async(fn -> categorical_pipeline(df, cat_attrs) end),
+    ], :infinity)
+    |> Nx.concatenate(axis: 1)
   end
 end

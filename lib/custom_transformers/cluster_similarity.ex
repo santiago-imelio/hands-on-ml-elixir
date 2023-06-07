@@ -30,7 +30,7 @@ defmodule ClusterSimilarity do
     %KMeans{
       clusters: _cluster_centers,
       labels: labels
-    } = fit(x, n_clusters, random_state) |> IO.inspect()
+    } = fit(x, n_clusters, random_state)
 
     transform(x, labels, n_clusters) |> Nx.stack(axis: 1)
   end
