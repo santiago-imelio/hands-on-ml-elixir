@@ -1,4 +1,4 @@
-defmodule Learning.Utils do
+defmodule Utils do
   alias Explorer.DataFrame, as: DF
 
   def shuffle_and_split_data(%DF{} = dataframe, num_rows \\ 0, test_ratio \\ 0.20) do

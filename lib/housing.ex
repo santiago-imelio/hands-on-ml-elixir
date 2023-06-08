@@ -1,15 +1,17 @@
-defmodule Learning.Housing do
+defmodule Housing do
   require Explorer.DataFrame, as: DF
   alias Explorer.Series, as: S
   alias Scholar.Impute.SimpleImputer
   alias Scholar.Preprocessing
+  alias DataTransformer, as: T
 
-  # Fetch housing data that we'll use to train our model
-  def load_housing_data do
-    csv_path =
+  def load_data do
+    datasets_path =
       "../hands_on"
       |> Path.expand()
-      |> Kernel.<>("/datasets/housing.csv")
+      |> Kernel.<>("/datasets")
+
+    csv_path = datasets_path <> "/housing.csv"
 
     raw_csv =
       if File.exists?(csv_path) do
@@ -17,44 +19,16 @@ defmodule Learning.Housing do
       else
         url = "https://raw.githubusercontent.com/ageron/data/main/housing.tgz"
 
-        IO.puts("Fetching data from #{url}...")
+        IO.puts("\nFetching data from #{url}...\n")
         [{'housing/housing.csv', csv_data}] = Req.get!(url).body
 
-        # Save CSV
+        File.mkdir!(datasets_path)
         File.write!(csv_path, csv_data)
 
         csv_data
       end
 
-    # Load csv into DataFrame
-    housing_df = DF.load_csv!(raw_csv)
-
-    # Explore first 5 rows of dataframe
-    DF.head(housing_df)
-    |> DF.table()
-    |> IO.inspect()
-
-    # Show Summary
-    DF.head(housing_df)
-    |> DF.describe()
-
-    housing_df
-  end
-
-  @doc """
-  List of numerical features names for housing dataset.
-  Note that we exclude our the feature to predict.
-  """
-  def num_housing_attrs do
-    ["longitude", "latitude", "housing_median_age", "total_rooms",
-      "total_bedrooms", "population", "households", "median_income"]
-  end
-
-  @doc """
-  List of categorical features names for housing dataset
-  """
-  def cat_housing_attrs do
-    ["ocean_proximity"]
+    DF.load_csv!(raw_csv)
   end
 
   def add_income_category_column(housing_df) do
@@ -74,8 +48,6 @@ defmodule Learning.Housing do
   end
 
   def numerical_pipeline(df, attrs) do
-    IO.puts("executing numerical pipeline ...")
-
     x = for name <- attrs, into: [] do
       {name, S.fill_missing(df[name], :nan)}
     end
@@ -89,8 +61,6 @@ defmodule Learning.Housing do
   end
 
   def categorical_pipeline(df, attrs) do
-    IO.puts("executing categorical pipeline ...")
-
     x = for name <- attrs, into: [] do
       {name, S.cast(DF.pull(df, name), :category)}
     end
@@ -103,8 +73,6 @@ defmodule Learning.Housing do
   end
 
   def ratio_pipeline(df, attr1, attr2) do
-    IO.puts("executing ratio pipeline -> #{attr1} / #{attr2} ...")
-
     x = for name <- [attr1, attr2], into: [] do
       {name, S.fill_missing(df[name], :nan)}
     end
@@ -123,10 +91,21 @@ defmodule Learning.Housing do
     Nx.divide(col1, col2) |> Nx.reshape({DF.n_rows(df), 1})
   end
 
-  # This takes a while, so not adding it to data pipeline
-  def cluster_simil(df, attrs) do
-    IO.puts("executing cluster similarity pipeline ...")
+  def log_pipeline(df, attrs) do
+    x = for name <- attrs, into: [] do
+      {name, S.fill_missing(df[name], :nan)}
+    end
+    |> DF.new()
+    |> Nx.stack(axis: 1)
+    |> Nx.log()
 
+    x
+    |> SimpleImputer.fit(strategy: :median)
+    |> SimpleImputer.transform(x)
+    |> Preprocessing.standard_scale(axes: [0])
+  end
+
+  def cluster_simil(df, attrs) do
     df
     |> DF.select(attrs)
     |> Nx.stack(axis: 1)
@@ -136,16 +115,22 @@ defmodule Learning.Housing do
   def preprocessing(df) do
     df = add_income_category_column(df)
 
-    num_attrs = num_housing_attrs()
-    cat_attrs = cat_housing_attrs() ++ ["income_category"]
+    cat_attrs = ["ocean_proximity"] ++ ["income_category"]
+    geo_attrs = ["latitude", "longitude"]
+    num_attrs = ["longitude", "latitude", "housing_median_age", "total_rooms",
+      "total_bedrooms", "population", "households", "median_income"]
+    heavy_tail_attrs = ["total_bedrooms", "total_rooms", "population",
+      "households", "median_income"]
 
-    Task.await_many([
-      Task.async(fn -> ratio_pipeline(df, "total_bedrooms", "total_rooms") end),
-      Task.async(fn -> ratio_pipeline(df, "total_rooms", "households") end),
-      Task.async(fn -> ratio_pipeline(df, "population", "households") end),
-      Task.async(fn -> numerical_pipeline(df, num_attrs) end),
-      Task.async(fn -> categorical_pipeline(df, cat_attrs) end),
-    ], :infinity)
+    T.run([
+      T.run(&ratio_pipeline/3, [df, "total_bedrooms", "total_rooms"]),
+      T.run(&ratio_pipeline/3, [df, "total_rooms", "households"]),
+      T.run(&ratio_pipeline/3, [df, "population", "households"]),
+      T.run(&log_pipeline/2, [df, heavy_tail_attrs]),
+      T.run(&cluster_simil/2, [df, geo_attrs]),
+      T.run(&numerical_pipeline/2, [df, num_attrs]),
+      T.run(&categorical_pipeline/2, [df, cat_attrs])
+    ])
     |> Nx.concatenate(axis: 1)
   end
 end

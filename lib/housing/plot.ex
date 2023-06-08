@@ -1,8 +1,10 @@
-defmodule Learning.Housing.Plot do
+defmodule Housing.Plot do
   alias VegaLite, as: VL
   alias Explorer.DataFrame, as: DF
 
-  # Taken from https://hexdocs.pm/scholar/linear_regression.html#california-housing
+  @doc """
+  Taken from https://hexdocs.pm/scholar/linear_regression.html#california-housing
+  """
   def all_features_hist(df) do
     VL.new(
       title: [
