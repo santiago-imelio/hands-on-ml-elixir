@@ -8,7 +8,7 @@ defmodule HandsOn do
     housing_df = Housing.load_data()
 
     # split and shuffle data into training and test
-    {train_data_df, test_data_df} = Utils.shuffle_and_split_data(housing_df, 2000)
+    {train_data_df, test_data_df} = Utils.shuffle_and_split_data(housing_df)
 
     IO.puts("Train data size: #{DF.n_rows(train_data_df)}")
     IO.puts("Test data size: #{DF.n_rows(test_data_df)}")
