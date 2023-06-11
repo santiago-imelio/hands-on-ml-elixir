@@ -3,7 +3,7 @@ defmodule HandsOn do
   alias Scholar.Linear.LinearRegression
   alias Scholar.Metrics
 
-  def run_housing_model do
+  def train_and_evaluate_housing_model do
     # fetch and load california housing dataset data
     housing_df = Housing.load_data()
 
@@ -21,10 +21,13 @@ defmodule HandsOn do
     # preprocess both train and test data
     IO.puts("\nRunning data pipeline ...")
 
-    [x_train, x_test] = Task.await_many([
-      Task.async(fn -> Housing.preprocessing(train_data_df) end),
-      Task.async(fn -> Housing.preprocessing(test_data_df) end)
+    [train_prepared_df, test_prepared_df] = Task.await_many([
+      Task.async(Housing, :preprocessing, [train_data_df]),
+      Task.async(Housing, :preprocessing, [test_data_df])
     ], :infinity)
+
+    x_train = train_prepared_df |> Nx.stack(axis: 1)
+    x_test = test_prepared_df |> Nx.stack(axis: 1)
 
     IO.puts("\nPreprocessing done. Training model ...")
 

@@ -105,13 +105,12 @@ defmodule Housing.Plot do
   end
 
   def geo_clusters(housing_df, clusters, kmeans_labels) do
-    clusters_df = DF.new(Nx.tensor(clusters)) |> IO.inspect()
+    clusters_df = DF.new(Nx.tensor(clusters))
     # kmeans_labels_df = DF.new(Nx.reshape(kmeans_labels, {20640, 1})) |> IO.inspect()
 
     df_with_kmeans_labels =
       housing_df
       |> DF.put("kmeans_labels", Nx.stack(kmeans_labels, axis: 1))
-      |> IO.inspect()
 
     VL.new(
       title: [
@@ -160,6 +159,101 @@ defmodule Housing.Plot do
           type: :ordinal,
           scale: [
             scheme: "rainbow"
+          ]
+        ]
+      ),
+      VL.new(
+        width: 800,
+        height: 650
+      )
+      |> VL.data_from_values(clusters_df)
+      |> VL.mark(:point, [
+        size: 70,
+        color: "#0d0154",
+        stroke_width: 10,
+        opacity: 1
+      ])
+      |> VL.encode_field(
+        :x,
+        "x2",
+        [
+          type: :quantitative,
+          scale: [
+            zero: false
+          ]
+        ]
+      )
+      |> VL.encode_field(
+        :y,
+        "x1",
+        [
+          type: :quantitative,
+          scale: [
+            zero: false
+          ]
+        ]
+      )
+    ])
+    |> VL.Viewer.show()
+  end
+
+  def geo_similarity(housing_df, clusters, kmeans_labels, silhoutte_samples) do
+    clusters_df = DF.new(Nx.tensor(clusters))
+    # kmeans_labels_df = DF.new(Nx.reshape(kmeans_labels, {20640, 1})) |> IO.inspect()
+
+    df_with_kmeans_labels =
+      housing_df
+      |> DF.put("kmeans_labels", Nx.stack(kmeans_labels, axis: 1))
+      |> DF.put("cluster_similarity", silhoutte_samples)
+      |> IO.inspect()
+
+    VL.new(
+      title: [
+        text: "Silhouette Coefficient Similarity to each cluster"
+      ],
+      width: 800,
+      height: 650,
+      config: [
+        axis: [
+          grid: true,
+          grid_color: "#dedede"
+        ]
+      ]
+    )
+    |> VL.layers([
+      VL.new(
+        width: 800,
+        height: 650
+      )
+      |> VL.data_from_values(df_with_kmeans_labels)
+      |> VL.mark(:point)
+      |> VL.encode_field(
+        :x,
+        "longitude",
+        [
+          type: :quantitative,
+          scale: [
+            zero: false
+          ]
+        ]
+      )
+      |> VL.encode_field(
+        :y,
+        "latitude",
+        [
+          type: :quantitative,
+          scale: [
+            zero: false
+          ]
+        ]
+      )
+      |> VL.encode_field(
+        :color,
+        "cluster_similarity",
+        [
+          type: :quantitative,
+          scale: [
+            scheme: "turbo"
           ]
         ]
       ),

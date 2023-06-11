@@ -3,7 +3,6 @@ defmodule Housing do
   alias Explorer.Series, as: S
   alias Scholar.Impute.SimpleImputer
   alias Scholar.Preprocessing
-  alias DataTransformer, as: T
 
   def load_data do
     datasets_path =
@@ -32,19 +31,19 @@ defmodule Housing do
   end
 
   def add_income_category_column(housing_df) do
+    bin_median_income = fn income_value ->
+      [0, 1.5, 3.0, 4.5, 6.0, :infinity]
+      |> Enum.find_index(&(income_value <= &1))
+      |> Integer.to_string()
+    end
+
     income_cat =
       housing_df
       |> DF.pull("median_income")
-      |> S.transform(&bin_median_income/1)
+      |> S.transform(bin_median_income)
       |> S.cast(:category)
 
     DF.put(housing_df, :income_category, income_cat)
-  end
-
-  defp bin_median_income(income_value) do
-    [0, 1.5, 3.0, 4.5, 6.0, :infinity]
-    |> Enum.find_index(&(income_value <= &1))
-    |> Integer.to_string()
   end
 
   def numerical_pipeline(df, attrs) do
@@ -88,7 +87,8 @@ defmodule Housing do
     col1 = Nx.take(x_new, 0, axis: 1)
     col2 = Nx.take(x_new, 1, axis: 1)
 
-    Nx.divide(col1, col2) |> Nx.reshape({DF.n_rows(df), 1})
+    Nx.divide(col1, col2)
+    |> Nx.reshape({DF.n_rows(df), 1})
   end
 
   def log_pipeline(df, attrs) do
@@ -115,22 +115,33 @@ defmodule Housing do
   def preprocessing(df) do
     df = add_income_category_column(df)
 
-    cat_attrs = ["ocean_proximity"] ++ ["income_category"]
+    cat_attrs = ["ocean_proximity", "income_category"]
     geo_attrs = ["latitude", "longitude"]
     num_attrs = ["longitude", "latitude", "housing_median_age", "total_rooms",
       "total_bedrooms", "population", "households", "median_income"]
     heavy_tail_attrs = ["total_bedrooms", "total_rooms", "population",
       "households", "median_income"]
 
-    T.run([
-      T.run(&ratio_pipeline/3, [df, "total_bedrooms", "total_rooms"]),
-      T.run(&ratio_pipeline/3, [df, "total_rooms", "households"]),
-      T.run(&ratio_pipeline/3, [df, "population", "households"]),
-      T.run(&log_pipeline/2, [df, heavy_tail_attrs]),
-      T.run(&cluster_simil/2, [df, geo_attrs]),
-      T.run(&numerical_pipeline/2, [df, num_attrs]),
-      T.run(&categorical_pipeline/2, [df, cat_attrs])
-    ])
+    new_names =
+      ["bedrooms_ratio"] ++
+      ["rooms_per_house"] ++
+      ["people_per_house"] ++
+      Enum.map(heavy_tail_attrs, &("log_#{&1}")) ++
+      ["geo_cluster_similarity"] ++
+      Enum.map(num_attrs, &("std_#{&1}")) ++
+      cat_attrs
+
+    Task.await_many([
+      Task.async(__MODULE__, :ratio_pipeline, [df, "total_bedrooms", "total_rooms"]),
+      Task.async(__MODULE__, :ratio_pipeline, [df, "total_rooms", "households"]),
+      Task.async(__MODULE__, :ratio_pipeline, [df, "population", "households"]),
+      Task.async(__MODULE__, :log_pipeline, [df, heavy_tail_attrs]),
+      Task.async(__MODULE__, :cluster_simil, [df, geo_attrs]),
+      Task.async(__MODULE__, :numerical_pipeline, [df, num_attrs]),
+      Task.async(__MODULE__, :categorical_pipeline, [df, cat_attrs])
+    ], :infinity)
     |> Nx.concatenate(axis: 1)
+    |> DF.new()
+    |> DF.rename(new_names)
   end
 end
