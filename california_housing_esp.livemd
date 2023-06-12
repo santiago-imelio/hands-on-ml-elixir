@@ -1,0 +1,503 @@
+# California Housing Dataset
+
+```elixir
+Mix.install([
+  {:nx, "~> 0.2"},
+  {:exla, "~> 0.5"},
+  {:scholar, "~> 0.1"},
+  {:req, "~> 0.3"},
+  {:explorer, "~> 0.5.0"},
+  {:vega_lite, "~> 0.1.6"},
+  {:kino_vega_lite, "~> 0.1.7"},
+  {:kino_explorer, "~> 0.1.7"}
+])
+
+# Use XLA backend for faster computation
+Nx.global_default_backend(EXLA.Backend)
+Nx.Defn.global_default_options(compiler: EXLA, client: :host)
+```
+
+## Introducción
+
+El objetivo de este livebook es presentar algunas de las librerias que provee Elixir para trabajar en ciencia de datos y aprendizaje automático. El ejemplo que veremos está fuertemente basado en el libro _Hands on Machine Learning w/Scikit-Learn, Keras, and TensorFlow_, específicamente en el Jupyter Notebook del capítulo 2: _End-to-end ML Project_. A su vez, vamos a demostrar como procesar un conjunto de datos para luego entrenar y evaluar un modelo de ML básico.
+
+<!-- livebook:{"break_markdown":true} -->
+
+Calofornia Housing es un conocido dataset que consiste en información obtenida de un censo en California en el año 1990, y contiene información relacionada a las casas de los diferentes _Census Block Groups_ (CBG) del estado. Cada dato del dataset contiene la siguiente información acerca de un CBG:
+
+* `longitude`
+* `latitude`
+* `housing_median_age`
+* `total_rooms`
+* `total_bedrooms`
+* `population`
+* `households`
+* `median_income`
+* `median_house_value`
+* `ocean_proximity`
+
+Supongamos que estamos trabajando para una empresa que nos asignó la tarea utilizar este dataset para construir un modelo de predicción del valor medio de una casa en un CBG. Es decir, nuestro modelo deberá ser capaz de aprender de nuestros datos para poder realizar una predicción del `median_house_value`, dada una nueva instancia con todos los otros datos.
+
+Un problema con este conjunto de datos es que no está limpio: tiene algunas filas con datos sin completar. Por ello vamos a necesitar preprocesar los datos antes de entrenar el modelo.
+
+## Obtención de datos
+
+Lo primero que debemos hacer es descargar los datos y convertirlos a un formato tabular. Para eso vamos a utilizar la libreria Explorer, la cual provee funciones convenientes para manipular datos en forma de tabla.
+
+```elixir
+alias Explorer.DataFrame, as: DF
+
+url = "https://raw.githubusercontent.com/ageron/data/main/housing.tgz"
+
+[{'housing/housing.csv', csv_data}] = Req.get!(url).body
+
+housing_df = DF.load_csv!(csv_data)
+```
+
+## Vistazo a la estructura de datos
+
+Una vez obtenido el dataset podemos comenzar a analizar los datos. Usando algunas funciones de `Explorer.DataFrame` podemos dar un vistazo inicial a la estructura.
+
+```elixir
+housing_df
+|> DF.describe()
+```
+
+`count`, `null_count`, `min` y `max` son bastante autoexplicatorios. `std` representa la _desviación estándar_, que cuantifica la dispersión de los datos. Las filas `25%`, `50%`, y `75%` son los llamados _percentiles_, e indican el valor del atributo por debajo del cual se encuentra un porcentaje de muestras.
+
+<!-- livebook:{"break_markdown":true} -->
+
+Todos las características del dataset son numéricas, salvo por `ocean_proximity` que es de tipo `string`. Al analizar un poco más de que se trata esta columna, nos damos cuenta que es un atributo categórico del dataset.
+
+```elixir
+alias Explorer.Series, as: S
+
+housing_df["ocean_proximity"]
+|> S.frequencies()
+```
+
+Otra forma de analizar los datos es creando diferentes tipos de gráficas para nuestros datos. Por ejemplo, podemos graficar un histograma para cada dato numérico.
+
+```elixir
+alias VegaLite, as: VL
+
+VL.new(
+  title: [
+    text: "Univariate Histograms of all features"
+  ],
+  width: 500,
+  height: 500,
+  columns: 3,
+  config: [
+    axis: [
+      grid: true,
+      grid_color: "#dedede"
+    ]
+  ]
+)
+|> VL.data_from_values(housing_df)
+|> VL.concat(
+  for name <- List.delete(housing_df.names, "ocean_proximity") do
+    VL.new()
+    |> VL.mark(:bar)
+    |> VL.encode_field(:x, name, bin: [bin: true, maxbins: 50], axis: [ticks: true])
+    |> VL.encode_field(:y, "value count", aggregate: :count)
+  end
+)
+```
+
+Algunas apreciaciones destacables:
+
+* los atributos tienen escalas muy distintas entre si. Más adelante veremos una técnica de preprocesado de datos llamada _feature scaling_ que nos permitirá normalizar la escala de todas las características.
+* muchas de las gráficas están sesgadas hacia la derecha (_right-skewed_). Esto puede ser perjudicial para nuestro modelo para detectar patrones entre las características. Transformaremos estos atributos para que tengan una distribución gaussiana (forma de campana y simétrica).
+
+## Explorando los datos en profundidad
+
+Dadas las columnas de latitud y longitud, podemos crear un represantación geográfica de los datos. En la siguiente representación podemos apreciar las zonas de alta densidad de CBG en California.
+
+```elixir
+california =
+  VL.new(
+    title: [
+      text: "Latitude-longitude scatterplot"
+    ],
+    width: 750,
+    height: 750,
+    config: [
+      axis: [
+        grid: true,
+        grid_color: "#dedede"
+      ]
+    ]
+  )
+  |> VL.data_from_values(housing_df)
+  |> VL.mark(:point, opacity: 1)
+  |> VL.encode_field(
+    :x,
+    "longitude",
+    type: :quantitative,
+    scale: [
+      zero: false
+    ]
+  )
+  |> VL.encode_field(
+    :y,
+    "latitude",
+    type: :quantitative,
+    scale: [
+      zero: false
+    ]
+  )
+```
+
+Si además codificamos otros datos de la tabla en nuestra gráfica, podemos obtener una visualización más útil de los datos. En la siguiente gráfica codificamos dos atributos más: `median_house_value` con un esquema de colores predefinido; y `population`, para el cual aumentaremos el tamaño del punto proporcinalmente.
+
+```elixir
+california
+|> VL.encode(:color,
+  field: "median_house_value",
+  type: :quantitative,
+  scale: [
+    scheme: "turbo"
+  ]
+)
+|> VL.encode(:size,
+  type: :quantitative,
+  field: "population"
+)
+```
+
+Esta imágen nos dice que `median_house_value` esta fuertemente relacionada con la locación (cercanía al océano) y con la densidad de población. Un algoritmo de clustering puede ser útil para detectar los clusters geográficos principales y para agregar nuevos features que midan la cercanía con los clusters principales. Más adelante veremos una técnica de clustering denominada KMeans. El atributo `ocean_proximity` también puede ser útil, aunque en la costa norte de California los precios no parecen tan altos como en la costa sur.
+
+<!-- livebook:{"break_markdown":true} -->
+
+### Experimentando con combinaciones
+
+Entre las características del dataset podemos encontrar algunas que no parecen tan útiles por sí solas. Por ejemplo, la cantidad de salas o cantidad de dormitorios por CBG (`total_rooms` y `total_bedrooms`) no parecen tener mucha significación. Sin embargo, podemos obtener algo más útil a partir de la combinación de estos datos, por ejemplo las tasas de dormitorio por sala, salas por casa, y personas por casa.
+
+Antes definimos un par de funciones de utilidad: `NumericDataFrame.fill_missing/1` nos permitirá completar las celdas del dataframe respentando cierta estrategia. A esta técnica se le llama imputación (_imputation_) y de esta manera podemos convertir el dataframe a un tensor bidimensional (matriz) y utilizar el módulo numérico `Nx`. Finalmente, `NumericDataFrame.ratio_transform/4` tomará el dataframe y el nombre de dos columnas, y devolverá el dataframe de con la nueva columna cuyos valores serán la división de las columnas dadas.
+
+```elixir
+defmodule NumericDataFrame do
+  def fill_missing(df, opts \\ [strategy: :mean]) do
+    for name <- DF.names(df), into: [] do
+      {name, S.fill_missing(df[name], opts[:strategy])}
+    end
+    |> DF.new()
+  end
+
+  def ratio_transform(df, attr1, attr2, new_name) do
+    x =
+      df
+      |> DF.select([attr1, attr2])
+      |> Nx.stack(axis: 1)
+
+    ratio_tensor =
+      Nx.divide(
+        Nx.take(x, 0, axis: 1),
+        Nx.take(x, 1, axis: 1)
+      )
+      |> Nx.reshape({DF.n_rows(df), 1})
+
+    DF.put(df, new_name, ratio_tensor)
+  end
+end
+```
+
+```elixir
+alias NumericDataFrame, as: NumDF
+
+ratio_attrs = ["total_rooms", "total_bedrooms", "households", "population"]
+
+ratios_df =
+  housing_df
+  |> DF.discard(["ocean_proximity"])
+  |> NumDF.fill_missing(strategy: :nan)
+  |> NumDF.ratio_transform("total_rooms", "households", "rooms_per_house")
+  |> NumDF.ratio_transform("total_bedrooms", "total_rooms", "bedrooms_ratio")
+  |> NumDF.ratio_transform("population", "households", "people_per_house")
+  |> DF.select(["rooms_per_house", "bedrooms_ratio", "people_per_house"])
+```
+
+## Preprocesamiento de datos
+
+El preprocesamiento de datos es fundamental antes de entrenar nuestro modelo. Nos va a permitir tanto mejorar la calidad y representatividad de nuestros datos, como descartar y transformar características irrelevantes. Además de las utilidades que nos brinda Explorer, vamos a utilizar Scholar, una librería que provee herramientas de ML tradicionales entre las cuales encontraremos utilidades para preprocesado.
+
+<!-- livebook:{"break_markdown":true} -->
+
+### Limpieza
+
+Ya vimos que Explorer nos provee de la función `Explorer.Series.fill_missing/2` que nos permite completar las celdas vacías de una columna siguiendo una estrategía preferida. Sin embargo, Scholar también nos provee de un módulo específico para esto. En cualquier caso, no podremos convertir un dataframe a tensor si el dataframe contiene celdas vacías. Por lo tanto, debemos primero sustituírlas por `:nan`. `SimpleImputer.fit/1` por defecto tomará `:nan` como un valor faltante y lo completará siguiendo la estrategia preferida.
+
+```elixir
+alias Scholar.Impute.SimpleImputer
+
+x =
+  housing_df
+  |> DF.discard("ocean_proximity")
+  |> NumDF.fill_missing(strategy: :nan)
+  |> Nx.stack(axis: 1)
+
+imputer = SimpleImputer.fit(x, strategy: :median)
+```
+
+El struct devuelto por la función tiene dos campos: `statistics` es un vector con los valores imputados para cada característica (en este caso es la mediana), y `missing_values` es el valor que tiene una celda vacía y que fue imputada. Finalmente podemos aplicar `SimpleImputer.transform/2` y obtener un tensor con los datos limpios.
+
+```elixir
+x_imputed = SimpleImputer.transform(imputer, x)
+```
+
+Podemos construir un nuevo dataframe con nuestros datos limpios.
+
+```elixir
+num_attrs = DF.names(DF.discard(housing_df, "ocean_proximity"))
+
+num_housing_df =
+  x_imputed
+  |> DF.new()
+  |> DF.rename(num_attrs)
+```
+
+### Escalado (feature scaling)
+
+El escalado es una de las transformaciones más importantes que vamos a realizar. Los algoritmos de aprendizaje automático no dan buenos resultados si los atributos numéricos difieren mucho en cuanto a sus escalas. Scholar nos provee de algunas funciones de escalado en el módulo `Scholar.Preprocessing`. Particularmente utilizaremos `standard_scale/2`.
+
+La estandarización consiste en restar la media y dividir por la desviación estándar. Esta transformación es útil en casos donde los datos tienen una distribución gaussiana. Recordemos que en nuestro caso muchas de las columnas tienen distribución sesgada hacia la derecha.
+
+Una forma de obtener una distribución gaussiana es reemplazando los valores por el logarítmo.
+
+```elixir
+heavy_tail_attrs = ["total_bedrooms", "total_rooms", "population", "households", "median_income"]
+
+x_log =
+  num_housing_df
+  |> DF.select(heavy_tail_attrs)
+  |> Nx.stack(axis: 1)
+  |> Nx.log()
+```
+
+Veamos como se ve la distribución de estas características luego de aplicar logarítmo.
+
+```elixir
+log_df =
+  x_log
+  |> DF.new()
+  |> DF.rename(heavy_tail_attrs)
+
+VL.new(
+  title: [
+    text: "Histograms after applying log"
+  ],
+  width: 500,
+  height: 500,
+  columns: 3,
+  config: [
+    axis: [
+      grid: true,
+      grid_color: "#dedede"
+    ]
+  ]
+)
+|> VL.data_from_values(log_df)
+|> VL.concat(
+  for name <- heavy_tail_attrs do
+    VL.new()
+    |> VL.mark(:bar)
+    |> VL.encode_field(:x, name, bin: [bin: true, maxbins: 50], axis: [ticks: true])
+    |> VL.encode_field(:y, "value count", aggregate: :count)
+  end
+)
+```
+
+Mucho mejor! Ahora sí estamos en condiciones de aplicar la transformación de Standard Scaler.
+
+```elixir
+alias Scholar.Preprocessing
+
+x_scaled = Preprocessing.standard_scale(x_log, axes: [0])
+```
+
+Una vez más podemos integar nuestros datos transformados en un dataframe.
+
+```elixir
+log_attrs = Enum.map(heavy_tail_attrs, &"log_#{&1}")
+
+log_num_df =
+  x_scaled
+  |> DF.new()
+  |> DF.rename(log_attrs)
+```
+
+### Creando nuestros propios transformadores
+
+Aunque las librerías estamos utilizando proveen herramientas para transformar datos, en general no van a ser suficientes y tendremos que crear nuestros propios transformadores. Por ejemplo, en la sección anterior vimos que aplicar logarítmo a distribuciones de cola pesada es una buena idea.
+
+En el siguiente ejemplo creamos un transformador que utilizaremos para determinar los clusters geográficos principales y posteriormente medir la similaridad de un punto a su cluster.
+
+```elixir
+defmodule ClusterSimilarity do
+  alias Scholar.Cluster.KMeans
+  alias Scholar.Metrics.Clustering
+
+  def fit(x, n_clusters \\ 10, random_state \\ 42) do
+    KMeans.fit(x, num_clusters: n_clusters, seed: random_state)
+  end
+
+  def transform(x, labels, n_clusters \\ 10) do
+    Clustering.silhouette_samples(x, labels, num_clusters: n_clusters)
+  end
+
+  def fit_transform(x, n_clusters \\ 10, random_state \\ 42) do
+    %KMeans{
+      clusters: _cluster_centers,
+      labels: labels
+    } = fit(x, n_clusters, random_state)
+
+    transform(x, labels, n_clusters)
+  end
+end
+```
+
+Hagamos un desglose del transformador anterior:
+
+* utilizaremos dos módulos de Scholar: `Cluster.KMeans` y `Metrics.Clustering`.
+* KMeans es un algoritmo de localización de clusters en los datos, y la cantidad de clusters que debe buscar está dado por el _hiperparámetro_ `num_clusters`. Luego de entrenar el algoritmo de KMeans, retorna un struct con los `clusters` y las etiquetas, entre otros datos. Este algoritmo lo ejecutamos en la función `fit/3` para obtener los clusters.
+* El coeficiente de Silueta es una métrica que evalúa la calidad de los agrupamientos obtenidos a través de un algoritmo de clustering. Mide la similaridad de cada muestra respecto a su cluster asignado en comparación con la similaridad a los otros clusters. Utilizamos esta métrica para transformar nuestros datos de geolocalización.
+
+```elixir
+x =
+  housing_df
+  |> DF.select(["latitude", "longitude"])
+  |> Nx.stack(axis: 1)
+
+kmeans = ClusterSimilarity.fit(x)
+```
+
+Si integramos los resultados de KMeans con nuestro dataframe, podemos visualizar en una gráfica los clusters obtenidos. Además, mediante una gráfica multi-layer podemos marcar los centros de masa de los agrupamientos. Podremos ver claramente que los centros de los clusters fueron posicionados en las zonas costosas y de alta densidad poblacional.
+
+```elixir
+clusters_df =
+  Nx.tensor(kmeans.clusters)
+  |> DF.new()
+  |> DF.rename(x1: "latitude", x2: "longitude")
+
+df_with_kmeans_labels =
+  housing_df
+  |> DF.put("kmeans_labels", Nx.stack(kmeans.labels, axis: 1))
+
+geo_vl =
+  VL.new()
+  |> VL.data_from_values(df_with_kmeans_labels)
+  |> VL.mark(:point)
+  |> VL.encode_field(
+    :x,
+    "longitude",
+    type: :quantitative,
+    scale: [
+      zero: false
+    ]
+  )
+  |> VL.encode_field(
+    :y,
+    "latitude",
+    type: :quantitative,
+    scale: [
+      zero: false
+    ]
+  )
+
+clusters_vl =
+  VL.new()
+  |> VL.data_from_values(clusters_df)
+  |> VL.mark(:point,
+    size: 70,
+    color: "#0d0154",
+    stroke_width: 10,
+    opacity: 1
+  )
+  |> VL.encode_field(
+    :x,
+    "longitude",
+    type: :quantitative,
+    scale: [
+      zero: false
+    ]
+  )
+  |> VL.encode_field(
+    :y,
+    "latitude",
+    type: :quantitative,
+    scale: [
+      zero: false
+    ]
+  )
+
+VL.new(
+  title: [
+    text: "Geographic clusters found by KMeans algorithm"
+  ],
+  width: 700,
+  height: 700,
+  config: [
+    axis: [
+      grid: true,
+      grid_color: "#dedede"
+    ]
+  ]
+)
+|> VL.layers([
+  geo_vl
+  |> VL.encode_field(
+    :color,
+    "kmeans_labels",
+    type: :ordinal,
+    scale: [
+      scheme: "category10"
+    ]
+  ),
+  clusters_vl
+])
+```
+
+Ahora vamos a utilizar nuestro transformador para obtener las coeficientes Silueta de similaridad de cada punto geográfico.
+
+```elixir
+silhouette_samples = ClusterSimilarity.transform(x, kmeans.labels)
+```
+
+De estos datos podemos obtener una variante de la visualización anterior, donde el color de cada punto indica la similaridad que tiene con su respectivo cluster. Esta gráfica nos ayuda a darnos una mejor idea de qué tan buena es la configuración de clusters obtenida de KMeans.
+
+```elixir
+similarity_col = Nx.stack(silhouette_samples, axis: 1)
+
+similarity_df =
+  df_with_kmeans_labels
+  |> DF.put("cluster_similarity", similarity_col)
+
+VL.new(
+  title: [
+    text: "Silhouette Similarity for each sample"
+  ],
+  width: 700,
+  height: 700,
+  config: [
+    axis: [
+      grid: true,
+      grid_color: "#dedede"
+    ]
+  ]
+)
+|> VL.layers([
+  geo_vl
+  |> VL.data_from_values(similarity_df)
+  |> VL.encode_field(
+    :color,
+    "cluster_similarity",
+    type: :quantitative,
+    scale: [
+      scheme: "plasma"
+    ]
+  ),
+  clusters_vl
+])
+```
