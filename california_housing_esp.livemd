@@ -45,7 +45,7 @@ Un problema con este conjunto de datos es que no está limpio: tiene algunas fil
 Lo primero que debemos hacer es descargar los datos y convertirlos a un formato tabular. Para eso vamos a utilizar la libreria Explorer, la cual provee funciones convenientes para manipular datos en forma de tabla.
 
 ```elixir
-alias Explorer.DataFrame, as: DF
+require Explorer.DataFrame, as: DF
 
 url = "https://raw.githubusercontent.com/ageron/data/main/housing.tgz"
 
@@ -173,50 +173,16 @@ Esta imágen nos dice que `median_house_value` esta fuertemente relacionada con 
 
 ### Experimentando con combinaciones
 
-Entre las características del dataset podemos encontrar algunas que no parecen tan útiles por sí solas. Por ejemplo, la cantidad de salas o cantidad de dormitorios por CBG (`total_rooms` y `total_bedrooms`) no parecen tener mucha significación. Sin embargo, podemos obtener algo más útil a partir de la combinación de estos datos, por ejemplo las tasas de dormitorio por sala, salas por casa, y personas por casa.
-
-Antes definimos un par de funciones de utilidad: `NumericDataFrame.fill_missing/1` nos permitirá completar las celdas del dataframe respentando cierta estrategia. A esta técnica se le llama imputación (_imputation_) y de esta manera podemos convertir el dataframe a un tensor bidimensional (matriz) y utilizar el módulo numérico `Nx`. Finalmente, `NumericDataFrame.ratio_transform/4` tomará el dataframe y el nombre de dos columnas, y devolverá el dataframe de con la nueva columna cuyos valores serán la división de las columnas dadas.
+Entre las características del dataset podemos encontrar algunas que no parecen tan útiles por sí solas. Por ejemplo, la cantidad de salas o cantidad de dormitorios por CBG (`total_rooms` y `total_bedrooms`) no parecen tener mucha significación. Sin embargo, podemos obtener algo más útil a partir de la combinación de estos datos, por ejemplo las tasas de dormitorio por sala, salas por casa, y personas por casa. Esto se puede lograr simplemente utilizando la macro `Explorer.DataFrame.mutate/2`.
 
 ```elixir
-defmodule NumericDataFrame do
-  def fill_missing(df, opts \\ [strategy: :mean]) do
-    for name <- DF.names(df), into: [] do
-      {name, S.fill_missing(df[name], opts[:strategy])}
-    end
-    |> DF.new()
-  end
-
-  def ratio_transform(df, attr1, attr2, new_name) do
-    x =
-      df
-      |> DF.select([attr1, attr2])
-      |> Nx.stack(axis: 1)
-
-    ratio_tensor =
-      Nx.divide(
-        Nx.take(x, 0, axis: 1),
-        Nx.take(x, 1, axis: 1)
-      )
-      |> Nx.reshape({DF.n_rows(df), 1})
-
-    DF.put(df, new_name, ratio_tensor)
-  end
-end
-```
-
-```elixir
-alias NumericDataFrame, as: NumDF
-
-ratio_attrs = ["total_rooms", "total_bedrooms", "households", "population"]
-
-ratios_df =
-  housing_df
-  |> DF.discard(["ocean_proximity"])
-  |> NumDF.fill_missing(strategy: :nan)
-  |> NumDF.ratio_transform("total_rooms", "households", "rooms_per_house")
-  |> NumDF.ratio_transform("total_bedrooms", "total_rooms", "bedrooms_ratio")
-  |> NumDF.ratio_transform("population", "households", "people_per_house")
-  |> DF.select(["rooms_per_house", "bedrooms_ratio", "people_per_house"])
+DF.mutate(
+  housing_df,
+  rooms_per_house: total_rooms / households,
+  bedrooms_ratio: total_bedrooms / total_rooms,
+  people_per_house: population / households
+)
+|> DF.select(["rooms_per_house", "bedrooms_ratio", "people_per_house"])
 ```
 
 ## Preprocesamiento de datos
@@ -232,11 +198,14 @@ Ya vimos que Explorer nos provee de la función `Explorer.Series.fill_missing/2`
 ```elixir
 alias Scholar.Impute.SimpleImputer
 
-x =
-  housing_df
-  |> DF.discard("ocean_proximity")
-  |> NumDF.fill_missing(strategy: :nan)
-  |> Nx.stack(axis: 1)
+num_housing_df = DF.discard(housing_df, "ocean_proximity")
+
+clean_cols =
+  for name <- DF.names(num_housing_df), into: [] do
+    {name, S.fill_missing(housing_df[name], :nan)}
+  end
+
+x = DF.new(clean_cols) |> Nx.stack(axis: 1)
 
 imputer = SimpleImputer.fit(x, strategy: :median)
 ```
@@ -500,4 +469,320 @@ VL.new(
   ),
   clusters_vl
 ])
+```
+
+### Tratamiento de features categóricos
+
+Vimos que nuestro dataset contien un feature de tipo categórico `ocean_proximity` que tiene 5 posibles valores.
+
+```elixir
+housing_df["ocean_proximity"]
+|> S.frequencies()
+```
+
+La mayoría de los algoritmos de ML prefieren trabajar con números, por lo que es una buena idea convertir estas categorías a números. Una forma muy común de codificar valores categóricos cuando no existe una relación de órden entre los valores, es crear un atributo binario (booleano) para cada valor. A esta técnina se le denomina _one-hot encoding_.
+
+```elixir
+housing_df
+|> DF.mutate(%{"ocean_proximity" => cast(ocean_proximity, :category)})
+|> DF.pull("ocean_proximity")
+|> Nx.stack(axis: 1)
+|> Nx.reshape({DF.n_rows(housing_df)})
+|> Preprocessing.one_hot_encode(num_classes: 5)
+```
+
+Sin embargo, `Explorer.DataFrame` provee otra forma de hacer esto que es utilizando la función `dummies/2`.
+
+```elixir
+housing_df
+|> DF.dummies("ocean_proximity")
+```
+
+## Pipelines de transformación
+
+Como vimos, nuestros datos deben pasar por un montón de transformaciones antes de entrenar nuestro modelo. Cuando estos transformadores se ejecutan de manera secuencial sobre un conjunto de columnas se crea lo que se llama un _pipeline_ de transformaciones. Un pipeline secuencial no es más que una composición de funciones secuencial.
+
+Vamos a crear un módulo que baja a tierra algunos de los transformadores que vimos.
+
+```elixir
+defmodule DataPipeline do
+  def clean_data_pipeline(df, attrs, strategy \\ :nan) do
+    for name <- attrs, into: [] do
+      {name, S.fill_missing(df[name], strategy)}
+    end
+    |> DF.new()
+  end
+
+  def cast_data_pipeline(df, attrs, type \\ :category) do
+    for name <- attrs, into: [] do
+      {name, S.cast(df[name], type)}
+    end
+    |> DF.new()
+  end
+
+  def numerical_pipeline(df, attrs) do
+    x =
+      df
+      |> clean_data_pipeline(attrs)
+      |> DF.select(attrs)
+      |> Nx.stack(axis: 1)
+
+    x
+    |> SimpleImputer.fit(strategy: :median)
+    |> SimpleImputer.transform(x)
+    |> Preprocessing.standard_scale(axes: [0])
+  end
+
+  def log_pipeline(df, attrs) do
+    x =
+      df
+      |> clean_data_pipeline(attrs)
+      |> DF.select(attrs)
+      |> Nx.stack(axis: 1)
+      |> Nx.log()
+
+    x
+    |> SimpleImputer.fit(strategy: :median)
+    |> SimpleImputer.transform(x)
+    |> Preprocessing.standard_scale(axes: [0])
+  end
+
+  def ratio_pipeline(df, attr1, attr2) do
+    x =
+      df
+      |> clean_data_pipeline([attr1, attr2])
+      |> DF.select([attr1, attr2])
+      |> Nx.stack(axis: 1)
+
+    x_new =
+      x
+      |> SimpleImputer.fit(strategy: :median)
+      |> SimpleImputer.transform(x)
+
+    col1 = Nx.take(x_new, 0, axis: 1)
+    col2 = Nx.take(x_new, 1, axis: 1)
+
+    Nx.divide(col1, col2)
+    |> Nx.reshape({DF.n_rows(df), 1})
+    |> Preprocessing.standard_scale(axes: [0])
+  end
+
+  def categorical_pipeline(df, attrs) do
+    x =
+      df
+      |> cast_data_pipeline(attrs)
+      |> Nx.stack(axis: 1)
+
+    x
+    |> SimpleImputer.fit(strategy: :mode)
+    |> SimpleImputer.transform(x)
+  end
+
+  def cluster_similarity(df, attrs) do
+    df
+    |> DF.select(attrs)
+    |> Nx.stack(axis: 1)
+    |> ClusterSimilarity.fit_transform()
+    |> Nx.stack(axis: 1)
+  end
+end
+```
+
+Cada uno de estos transformadores será utilizado para ciertas columnas del dataframe, y finalmente podremos integrar todas las columnas transformadas en un tensor para poder entrenar nuestro modelo. El siguiente módulo crea un función llamada `preprocessing/1` que toma el dataframe de datos y devuelve un tensor con todas las columnas transformadas.
+
+Notese que ejecutamos cada pipeline de transformaciones en un proceso nuevo, haciendo uso de la concurrencia que provee Elixir.
+
+```elixir
+defmodule ColumnTransformer do
+  alias DataPipeline, as: Pipeline
+
+  def preprocessing(df) do
+    cat_attrs = ["ocean_proximity"]
+    geo_attrs = ["latitude", "longitude"]
+
+    num_attrs = [
+      "longitude",
+      "latitude",
+      "housing_median_age",
+      "total_rooms",
+      "total_bedrooms",
+      "population",
+      "households",
+      "median_income"
+    ]
+
+    heavy_tail_attrs = [
+      "total_bedrooms",
+      "total_rooms",
+      "population",
+      "households",
+      "median_income"
+    ]
+
+    Task.await_many(
+      [
+        Task.async(Pipeline, :ratio_pipeline, [df, "total_bedrooms", "total_rooms"]),
+        Task.async(Pipeline, :ratio_pipeline, [df, "total_rooms", "households"]),
+        Task.async(Pipeline, :ratio_pipeline, [df, "population", "households"]),
+        Task.async(Pipeline, :log_pipeline, [df, heavy_tail_attrs]),
+        Task.async(Pipeline, :cluster_similarity, [df, geo_attrs]),
+        Task.async(Pipeline, :numerical_pipeline, [df, num_attrs]),
+        Task.async(Pipeline, :categorical_pipeline, [df, cat_attrs])
+      ],
+      :infinity
+    )
+    |> Nx.concatenate(axis: 1)
+  end
+end
+```
+
+```elixir
+ColumnTransformer.preprocessing(housing_df)
+```
+
+## Creando un conjunto de test
+
+Una parte necesaria la hora de crear un modelo es evaluarlo, es decir, determinar la calidad de sus predicciones. Para esto, vamos a dividir nuestro conjunto original de datos en dos partes: un conjunto de entrenamiento (_train set_) y un conjunto de test (_test set_). A continuación definimos la función `shuffle_and_split_data/2` que se encarga de esto.
+
+```elixir
+defmodule Utils do
+  def shuffle_and_split_data(%DF{} = dataframe, test_ratio \\ 0.20) do
+    shuffled_data =
+      dataframe
+      # seed is for having reproducible results
+      |> DF.shuffle(seed: 42)
+
+    test_data_size =
+      shuffled_data
+      |> DF.n_rows()
+      |> Kernel.*(test_ratio)
+      |> trunc()
+
+    train_data_size =
+      shuffled_data
+      |> DF.n_rows()
+      |> Kernel.-(test_data_size)
+
+    {DF.head(shuffled_data, train_data_size), DF.tail(shuffled_data, test_data_size)}
+  end
+end
+```
+
+Esta función se basa en muestreo aleatorio, lo que generalmente funciona bien en datasets que son grandes. Si no lo es, se corre un gran riesgo de introducir sesgo muestral (_sampling bias_).
+
+Supongamos que al hablar con un experto, este nos dice que el ingreso medio en un CBG es dato de suma importancia a la hora de determinar el precio medio de una casa. Por ello, vamos a querer que nuestro test set sea representativo de las distintas categorías de ingreso medio que existen en nuestro conjunto. Para esto podríamos crear un nuevo feature `income_category` y estratificar de acuerdo a esta categoría. A esta técnia se le denomina muestreo estratificado (_stratified sampling_).
+
+```elixir
+add_income_category_column = fn housing_df ->
+  bin_median_income = fn income_value ->
+    [0, 1.5, 3.0, 4.5, 6.0, :infinity]
+    |> Enum.find_index(&(income_value <= &1))
+    |> Integer.to_string()
+  end
+
+  income_cat =
+    housing_df
+    |> DF.pull("median_income")
+    |> S.transform(bin_median_income)
+    |> S.cast(:category)
+
+  DF.put(housing_df, :income_category, income_cat)
+end
+```
+
+Veamos un histograma de las categorías que creamos.
+
+```elixir
+income_cat_df = add_income_category_column.(housing_df)
+
+VL.new(
+  title: [
+    text: "Income category histogram"
+  ],
+  width: 500,
+  height: 500,
+  columns: 3,
+  config: [
+    axis: [
+      grid: true,
+      grid_color: "#dedede"
+    ]
+  ]
+)
+|> VL.data_from_values(income_cat_df)
+|> VL.mark(:bar)
+|> VL.encode_field(:x, "income_category", axis: [ticks: true])
+|> VL.encode_field(:y, "value count", aggregate: :count)
+```
+
+## Entrenando y evaluando nuestro modelo
+
+Decidimos entrenar un modelo básico de regresión lineal. En el fondo, el modelo de regresión lineal resuelve el problema de mínimos cuadrados lineal (PMCL) asociado a el input `x` y los puntos `y` dados. Es decir que va a encontrar los coeficientes de una función de ajuste, de forma tal que se minimiza $|| Ax - Y||^2$ donde $A$ es la matriz de datos de entrenamiento e $Y$ son las etiquetas.
+
+Como medidas de rendiemiento (o error) vamos a tomar la distancia cuadrática media y el error absoluto medio.
+
+<!-- livebook:{"break_markdown":true} -->
+
+<p>
+$\text{RMSE}(y, \hat{y}) = {\frac{\sum_{i=0}^{n - 1} (y_i - \hat{y}_i)^2}{n}}$
+</p>
+
+```elixir
+defmodule Housing do
+  alias Scholar.Linear.LinearRegression
+  alias Scholar.Metrics
+
+  def train_and_evaluate_model(housing_df) do
+    # split and shuffle data into training and test
+    {train_data_df, test_data_df} = Utils.shuffle_and_split_data(housing_df)
+
+    IO.puts("Train data size: #{DF.n_rows(train_data_df)}")
+    IO.puts("Test data size: #{DF.n_rows(test_data_df)}")
+
+    # labels
+    y = Nx.concatenate(housing_df[["median_house_value"]])
+    y_train = Nx.concatenate(train_data_df[["median_house_value"]])
+    y_test = Nx.concatenate(test_data_df[["median_house_value"]])
+
+    # preprocess both train and test data
+    IO.puts("\nRunning data pipeline ...")
+
+    [train_prepared_df, test_prepared_df] =
+      Task.await_many(
+        [
+          Task.async(ColumnTransformer, :preprocessing, [train_data_df]),
+          Task.async(ColumnTransformer, :preprocessing, [test_data_df])
+        ],
+        :infinity
+      )
+
+    x_train = train_prepared_df
+    x_test = test_prepared_df
+
+    IO.puts("\nPreprocessing done. Training model ...")
+
+    # train linear model
+    model = LinearRegression.fit(x_train, y_train)
+
+    IO.puts("\nTraining Done.\n")
+
+    # predict on test set
+    predictions = LinearRegression.predict(model, x_test)
+
+    # calculate errors
+    rmse = Metrics.mean_square_error(y_test, predictions) |> Nx.sqrt()
+    mae = Metrics.mean_absolute_error(y_test, predictions)
+
+    IO.puts(":: performance report ::\n")
+    IO.puts("> target mean (reference): #{Nx.mean(y) |> Nx.to_number()}")
+    IO.puts("> RMSE: #{Nx.to_number(rmse)}")
+    IO.puts("> MAE: #{Nx.to_number(mae)}\n")
+
+    model
+  end
+end
+```
+
+```elixir
+model = Housing.train_and_evaluate_model(housing_df)
 ```
