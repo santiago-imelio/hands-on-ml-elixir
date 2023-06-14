@@ -717,15 +717,15 @@ VL.new(
 
 ## Entrenando y evaluando nuestro modelo
 
-Decidimos entrenar un modelo básico de regresión lineal. En el fondo, el modelo de regresión lineal resuelve el problema de mínimos cuadrados lineal (PMCL) asociado a el input `x` y los puntos `y` dados. Es decir que va a encontrar los coeficientes de una función de ajuste, de forma tal que se minimiza $|| Ax - Y||^2$ donde $A$ es la matriz de datos de entrenamiento e $Y$ son las etiquetas.
+Decidimos entrenar un modelo básico de regresión lineal. En el fondo, el modelo de regresión lineal resuelve el problema de mínimos cuadrados lineal (PMCL) asociado a el input `x` y los puntos `y` dados. Es decir que va a encontrar los coeficientes de una función de ajuste, de forma tal que se minimiza $|| Ax - Y||^2$ donde $A$ es la matriz de datos preprocesados de entrenamiento e $Y$ son las etiquetas.
 
-Como medidas de rendiemiento (o error) vamos a tomar la distancia cuadrática media y el error absoluto medio.
+Como medida de rendiemiento (o error) vamos a tomar la distancia cuadrática media.
 
-<!-- livebook:{"break_markdown":true} -->
+$$
 
-<p>
-$\text{RMSE}(y, \hat{y}) = {\frac{\sum_{i=0}^{n - 1} (y_i - \hat{y}_i)^2}{n}}$
-</p>
+\text{RMSE}(y, \hat{y}) = \sqrt{\sum_{i=0}^{n - 1} \frac{1}{n}(y_i - \hat{y}_i)^2}
+
+$$
 
 ```elixir
 defmodule Housing do
