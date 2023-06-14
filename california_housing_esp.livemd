@@ -722,9 +722,9 @@ Decidimos entrenar un modelo básico de regresión lineal. En el fondo, el model
 Como medida de rendiemiento (o error) vamos a tomar la distancia cuadrática media.
 
 $$
-
-\text{RMSE}(y, \hat{y}) = \sqrt{\sum_{i=0}^{n - 1} \frac{1}{n}(y_i - \hat{y}_i)^2}
-
+\begin{equation}
+RMSE(y, \hat{y}) = \sqrt{\sum_{i=0}^{n - 1}{\frac{1}{n}(y_i - \hat{y}_i)^2}}
+\end{equation}
 $$
 
 ```elixir
