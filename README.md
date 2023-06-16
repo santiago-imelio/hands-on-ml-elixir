@@ -87,22 +87,3 @@ Prediction for Cyprus:
   [6.301657612120332]
 >
 ```
-
-## Figure 2-13. California housing prices (page 63)
-
-The California Housing Prices dataset includes geographical information (latitude and longitude of districts), so it is a good idea to create a scatterplot of all the districts to visualize the data. Start a new IEx session:
-
-```
-iex -S mix
-```
-
-Run the following to visualize the geographical scatterplot of California Housing dataset:
-
-```
-iex(1)> Learning.Housing.load_housing_data |> Learning.Housing.Plot.location_scatter_plot
-```
-
-<img width="990" alt="Screen Shot 2023-05-14 at 11 21 29" src="https://github.com/santiago-imelio/hands-on-ml-elixir/assets/82551777/113df858-cf72-4895-8718-2a6371e107e1">
-
-The radius of each circle represents the district’s population, and the color represents the price. This image tells you that the housing prices are very much related to the location (e.g., close to the ocean) and to the population density.
-
