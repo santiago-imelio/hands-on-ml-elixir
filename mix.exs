@@ -29,7 +29,8 @@ defmodule HandsOn.MixProject do
       {:explorer, "~> 0.5.0"},
       {:vega_lite, "~> 0.1.6"},
       {:kino_vega_lite, "~> 0.1.7"},
-      {:kino, "~> 0.8.1"}
+      {:kino, "~> 0.8.1"},
+      {:scidata, "~> 0.1.6"}
     ]
   end
 end
