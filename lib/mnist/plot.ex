@@ -26,10 +26,25 @@ defmodule MNIST.Plot do
       height: 500
     )
     |> VL.data_from_values(cm_df)
-    |> VL.mark(:rect, align: :center)
-    |> VL.encode_field(:x, "predicted_label", type: :ordinal)
-    |> VL.encode_field(:y, "true_label", type: :ordinal)
-    |> VL.encode_field(:color, "confusion_val", type: :quantitative, scale: [scheme: "turbo"])
+    |> VL.layers([
+      VL.new()
+      |> VL.mark(:rect)
+      |> VL.encode_field(:x, "predicted_label", type: :ordinal)
+      |> VL.encode_field(:y, "true_label", type: :ordinal)
+      |> VL.encode_field(:color, "confusion_val", [
+        type: :quantitative,
+        scale: [scheme: "turbo"]
+      ]),
+      VL.new()
+      |> VL.encode_field(:x, "predicted_label", type: :ordinal)
+      |> VL.encode_field(:y, "true_label", type: :ordinal)
+      |> VL.mark(:text, [
+        font_weight: :bold,
+        font_size: 14,
+        color: "#FFFF"
+      ])
+      |> VL.encode_field(:text, "confusion_val")
+    ])
     |> VL.Viewer.show()
   end
 end
