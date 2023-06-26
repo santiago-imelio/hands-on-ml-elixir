@@ -24,6 +24,7 @@ defmodule HandsOn.MixProject do
       {:nx, "~> 0.2"},
       {:exla, "~> 0.5"},
       {:scholar, "~> 0.1"},
+      {:axon, "~> 0.5"},
       {:req, "~> 0.3"},
       {:csv, "~> 3.0"},
       {:explorer, "~> 0.5.0"},

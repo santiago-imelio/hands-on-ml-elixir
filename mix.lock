@@ -1,4 +1,5 @@
 %{
+  "axon": {:hex, :axon, "0.5.1", "1ae3a2193df45e51fca912158320b2ca87cb7fba4df242bd3ebe245504d0ea1a", [:mix], [{:kino, "~> 0.7", [hex: :kino, repo: "hexpm", optional: true]}, {:kino_vega_lite, "~> 0.1.7", [hex: :kino_vega_lite, repo: "hexpm", optional: true]}, {:nx, "~> 0.5.0", [hex: :nx, repo: "hexpm", optional: false]}, {:table_rex, "~> 3.1.1", [hex: :table_rex, repo: "hexpm", optional: true]}], "hexpm", "d36f2a11c34c6c2b458f54df5c71ffdb7ed91c6a9ccd908faba909c84cc6a38e"},
   "castore": {:hex, :castore, "1.0.1", "240b9edb4e9e94f8f56ab39d8d2d0a57f49e46c56aced8f873892df8ff64ff5a", [:mix], [], "hexpm", "b4951de93c224d44fac71614beabd88b71932d0b1dea80d2f80fb9044e01bbb3"},
   "complex": {:hex, :complex, "0.5.0", "af2d2331ff6170b61bb738695e481b27a66780e18763e066ee2cd863d0b1dd92", [:mix], [], "hexpm", "2683bd3c184466cfb94fad74cbfddfaa94b860e27ad4ca1bffe3bff169d91ef1"},
   "contex": {:hex, :contex, "0.4.0", "e7c1dc27219054f96540a21bb4bcad1c67fca6b4389b3db82ea57135819afcf5", [:mix], [{:nimble_strftime, "~> 0.1.0", [hex: :nimble_strftime, repo: "hexpm", optional: false]}], "hexpm", "137aa760859014a94cbea841f76f1d2c4fcd2ea743ec5a61c3fddf05a15db161"},
