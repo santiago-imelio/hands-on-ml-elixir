@@ -53,7 +53,7 @@ defmodule MNIST do
     {samples, img_width, img_height} = Nx.shape(x)
     x_train = Nx.reshape(x, {samples, img_width * img_height})
 
-    LogReg.fit(x_train, y_5(y), [num_classes: 10, learning_rate: 0.1])
+    LogReg.fit(x_train, y_5(y), [num_classes: 2, learning_rate: 0.1])
   end
 
   def predict_equal_to_five(model, %Nx.Tensor{shape: @sample_dims} = sample) do
