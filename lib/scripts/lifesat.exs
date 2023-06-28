@@ -17,8 +17,8 @@ VL.new(
   title: [
     text: "Conuntry GDP per capita - Life Satisfaction"
   ],
-  width: 600,
-  height: 400,
+  width: 700,
+  height: 500,
   config: [
     axis: [
       grid: true,
@@ -27,15 +27,24 @@ VL.new(
   ]
 )
 |> VL.data_from_values(lifesat)
-|> VL.mark(:point, tooltip: true, grid: true)
-|> VL.encode_field(:x, "GDP per capita (USD)",
+|> VL.encode_field(:x, "GDP per capita (USD)", [
   type: :quantitative,
-  bin: [bin: true, field: "GDP per capita (USD)"]
-)
-|> VL.encode_field(:y, "Life satisfaction",
+  scale: [domain: [25000, 65000]]
+])
+|> VL.encode_field(:y, "Life satisfaction", [
   type: :quantitative,
-  bin: [bin: true, maxbins: 12, field: "Life satisfaction"]
-)
+  scale: [domain: [5.0, 8.0]]
+])
+|> VL.encode_field(:text, "Country")
+|> VL.layers([
+  VL.new() |> VL.mark(:point, opacity: 1, size: 8),
+  VL.new() |> VL.mark(:text, [
+    align: :left,
+    baseline: :bottom,
+    x_offset: 5,
+    y_offset: -5
+  ])
+])
 |> VL.Viewer.show_and_wait()
 
 # Prepare data for model

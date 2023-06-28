@@ -34,8 +34,8 @@ VL.new(
   title: [
     text: "Conuntry GDP per capita - Life Satisfaction"
   ],
-  width: 600,
-  height: 400,
+  width: 700,
+  height: 500,
   config: [
     axis: [
       grid: true,
@@ -44,9 +44,24 @@ VL.new(
   ]
 )
 |> VL.data_from_values(lifesat)
-|> VL.mark(:point, tooltip: true)
-|> VL.encode_field(:x, "GDP per capita (USD)", type: :quantitative, bin: [bin: true, field: "GDP per capita (USD)"])
-|> VL.encode_field(:y, "Life satisfaction", type: :quantitative, bin: [bin: true, maxbins: 12, field: "Life satisfaction"])
+|> VL.encode_field(:x, "GDP per capita (USD)", [
+  type: :quantitative,
+  scale: [domain: [25000, 65000]]
+])
+|> VL.encode_field(:y, "Life satisfaction", [
+  type: :quantitative,
+  scale: [domain: [5.0, 8.0]]
+])
+|> VL.encode_field(:text, "Country")
+|> VL.layers([
+  VL.new() |> VL.mark(:point, opacity: 1, size: 8),
+  VL.new() |> VL.mark(:text, [
+    align: :left,
+    baseline: :bottom,
+    x_offset: 5,
+    y_offset: -5
+  ])
+])
 |> VL.Viewer.show_and_wait()
 ```
 <img width="663" alt="Screen Shot 2023-05-13 at 13 38 06" src="https://github.com/santiago-imelio/hands-on-ml-elixir/assets/82551777/01cec99c-0242-4ec7-b8a3-0932128be98a">
