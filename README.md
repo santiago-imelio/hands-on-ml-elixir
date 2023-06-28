@@ -64,7 +64,7 @@ VL.new(
 ])
 |> VL.Viewer.show_and_wait()
 ```
-<img width="663" alt="Screen Shot 2023-05-13 at 13 38 06" src="https://github.com/santiago-imelio/hands-on-ml-elixir/assets/82551777/01cec99c-0242-4ec7-b8a3-0932128be98a">
+<img width="762" alt="Screen Shot 2023-06-28 at 10 41 53" src="https://github.com/santiago-imelio/hands-on-ml-elixir/assets/82551777/82a925ea-602f-49d8-bcee-3f511693f650">
 
 Although data is noisy, it looks like life satisfaction goes up more or less linearly as the country’s GDP per capita increases. Based on this assumption, we decide to model life satisfaction as a linear function of GDP per capita.
 
