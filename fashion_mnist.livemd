@@ -1,0 +1,113 @@
+# FashionMNIST
+
+```elixir
+Mix.install([
+  {:nx, "~> 0.2"},
+  {:exla, "~> 0.5"},
+  {:scholar, "~> 0.1"},
+  {:axon, "~> 0.5"},
+  {:req, "~> 0.3"},
+  {:explorer, "~> 0.5.0"},
+  {:vega_lite, "~> 0.1.6"},
+  {:kino_vega_lite, "~> 0.1.7"},
+  {:kino_explorer, "~> 0.1.7"},
+  {:scidata, "~> 0.1.6"}
+])
+
+# Use XLA backend for faster computation
+Nx.global_default_backend(EXLA.Backend)
+Nx.Defn.global_default_options(compiler: EXLA, client: :host)
+```
+
+## Section
+
+```elixir
+defmodule FashionMNIST do
+  @class_names [
+    "T-shirt/top",
+    "Trouser",
+    "Pullover",
+    "Dress",
+    "Coat",
+    "Sandal",
+    "Shirt",
+    "Sneaker",
+    "Bag",
+    "Ankle boot"
+  ]
+
+  def load_data do
+    train_data = Scidata.FashionMNIST.download()
+    test_data = Scidata.FashionMNIST.download_test()
+
+    train_data = extract_and_normalize_data(train_data)
+    test_data = extract_and_normalize_data(test_data)
+
+    {train_data, test_data}
+  end
+
+  defp extract_and_normalize_data({images, labels}) do
+    {images_binary, images_type, images_shape} = images
+    {labels_binary, labels_type, labels_shape} = labels
+
+    x =
+      images_binary
+      |> Nx.from_binary(images_type)
+      |> Nx.reshape(images_shape)
+      |> Nx.squeeze()
+
+    y =
+      labels_binary
+      |> Nx.from_binary(labels_type)
+      |> Nx.reshape(labels_shape)
+
+    {normalize_data(x), normalize_data(y)}
+  end
+
+  @doc """
+  Divides each pixel intensity between max intensity.
+  """
+  def normalize_data(t) do
+    Nx.divide(t, 255)
+  end
+
+  def model() do
+    Axon.input("input", shape: {nil, 28, 28})
+    |> Axon.flatten(name: "flatten")
+    |> Axon.dense(300, activation: :relu)
+    |> Axon.dense(100, activation: :relu)
+    |> Axon.dense(10, activation: :softmax)
+  end
+end
+```
+
+```elixir
+{{x_train, y_train}, {x_test, y_test}} = FashionMNIST.load_data()
+```
+
+```elixir
+model = FashionMNIST.model()
+```
+
+```elixir
+model |> Axon.Display.as_graph(Nx.template({1, 28, 28}, :f32))
+```
+
+```elixir
+model = Axon.build(model, compiler: EXLA, mode: :train)
+```
+
+```elixir
+loop = Axon.Loop.trainer(model, :categorical_cross_entropy, :sgd)
+```
+
+```elixir
+x_data = Nx.to_batched(x_train, 20)
+y_data = Nx.to_batched(y_train |> Nx.reshape({60000, 1}), 20)
+
+train_data = Stream.zip(x_data, y_data)
+```
+
+```elixir
+results = Axon.Loop.run(loop, train_data, %{}, epochs: 10, compiler: EXLA)
+```
