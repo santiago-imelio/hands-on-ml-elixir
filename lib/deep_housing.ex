@@ -106,4 +106,34 @@ defmodule DeepHousing do
     Scholar.Metrics.mean_square_error(y_true, y_pred)
     |> Nx.sqrt()
   end
+
+  def run_example() do
+    {{x_train, y_train}, {x_test, y_test}} = housing_data()
+
+    model =
+      x_train
+      |> Nx.shape()
+      |> model()
+
+    # show table represantation of model
+    model |> Axon.Display.as_table(x_train) |> IO.puts()
+
+    {train_data, validation_data} = train_val_batches(x_train, y_train)
+
+    IO.puts("Training model ...\n")
+    params = fit(model, train_data, validation_data)
+
+    IO.puts("\nTraining done.\n")
+
+    y_pred = predict(model, params, x_test)
+
+    # calculate errors
+    rmse = performance(y_test, y_pred)
+    mae = Axon.Metrics.mean_absolute_error(y_test, y_pred)
+
+    IO.puts(":: performance report ::\n")
+    IO.puts("> target mean (reference): #{Nx.mean(y_train) |> Nx.to_number}")
+    IO.puts("> RMSE: #{Nx.to_number(rmse)}")
+    IO.puts("> MAE: #{Nx.to_number(mae)}")
+  end
 end
