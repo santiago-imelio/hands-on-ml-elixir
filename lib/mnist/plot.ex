@@ -26,18 +26,16 @@ defmodule MNIST.Plot do
       height: 500
     )
     |> VL.data_from_values(cm_df)
+    |> VL.encode_field(:x, "predicted_label", type: :ordinal)
+    |> VL.encode_field(:y, "true_label", type: :ordinal)
     |> VL.layers([
       VL.new()
       |> VL.mark(:rect)
-      |> VL.encode_field(:x, "predicted_label", type: :ordinal)
-      |> VL.encode_field(:y, "true_label", type: :ordinal)
       |> VL.encode_field(:color, "confusion_val", [
         type: :quantitative,
         scale: [scheme: "turbo"]
       ]),
       VL.new()
-      |> VL.encode_field(:x, "predicted_label", type: :ordinal)
-      |> VL.encode_field(:y, "true_label", type: :ordinal)
       |> VL.mark(:text, [
         font_weight: :bold,
         font_size: 14,
@@ -75,18 +73,16 @@ defmodule MNIST.Plot do
       height: 500
     )
     |> VL.data_from_values(ncm_df)
+    |> VL.encode_field(:x, "predicted_label", type: :ordinal)
+    |> VL.encode_field(:y, "true_label", type: :ordinal)
     |> VL.layers([
       VL.new()
       |> VL.mark(:rect)
-      |> VL.encode_field(:x, "predicted_label", type: :ordinal)
-      |> VL.encode_field(:y, "true_label", type: :ordinal)
       |> VL.encode_field(:color, "confusion_ratio", [
         type: :quantitative,
         scale: [scheme: "turbo"]
       ]),
       VL.new()
-      |> VL.encode_field(:x, "predicted_label", type: :ordinal)
-      |> VL.encode_field(:y, "true_label", type: :ordinal)
       |> VL.mark(:text, [
         font_weight: :bold,
         font_size: 12,
