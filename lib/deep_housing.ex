@@ -5,6 +5,7 @@ defmodule DeepHousing do
   """
 
   alias Explorer.DataFrame, as: DF
+  import Utils
 
   @val_size 6512
 
@@ -12,7 +13,7 @@ defmodule DeepHousing do
     {train, test} =
       Housing.load_data()
       |> DF.discard("ocean_proximity")
-      |> Utils.shuffle_and_split_data()
+      |> shuffle_and_split_data()
 
     df_x_train = DF.discard(train, "median_house_value")
     df_x_test = DF.discard(test, "median_house_value")
@@ -90,21 +91,13 @@ defmodule DeepHousing do
     model
     |> Axon.build(compiler: EXLA, mode: :train)
     |> Axon.Loop.trainer(:mean_squared_error, :adam)
+    |> Axon.Loop.metric(&root_mean_square_error/2, "RMSE")
     |> Axon.Loop.validate(model, val_data)
-    |> Axon.Loop.metric(:mean_absolute_error, "MAE")
     |> Axon.Loop.run(train_data, %{}, epochs: 50, compiler: EXLA)
   end
 
   def predict(model, params, x_new) do
     Axon.predict(model, params, x_new)
-  end
-
-  @doc """
-  Calculates RMSE as performance measure
-  """
-  def performance(y_true, y_pred) do
-    Scholar.Metrics.mean_square_error(y_true, y_pred)
-    |> Nx.sqrt()
   end
 
   def run_example() do
@@ -128,7 +121,7 @@ defmodule DeepHousing do
     y_pred = predict(model, params, x_test)
 
     # calculate errors
-    rmse = performance(y_test, y_pred)
+    rmse = root_mean_square_error(y_test, y_pred)
     mae = Axon.Metrics.mean_absolute_error(y_test, y_pred)
 
     IO.puts(":: performance report ::\n")

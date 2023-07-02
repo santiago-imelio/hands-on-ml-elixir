@@ -29,4 +29,10 @@ defmodule Utils do
     {DF.head(shuffled_data, train_data_size),
       DF.tail(shuffled_data, test_data_size)}
   end
+
+  def root_mean_square_error(y_true, y_pred) do
+    y_true
+    |> Scholar.Metrics.mean_square_error(y_pred)
+    |> Nx.sqrt()
+  end
 end
